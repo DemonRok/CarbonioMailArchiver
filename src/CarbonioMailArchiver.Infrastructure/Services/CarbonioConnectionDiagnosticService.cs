@@ -78,17 +78,37 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
         return new ConnectionDiagnosticResult(false, "Login completato ma nessun cookie ZX_AUTH_TOKEN/ZM_AUTH_TOKEN ricevuto.", null, null);
       }
 
+      var noOpResponse = await PostNoOpAsync(httpClient, soapUri, settings.Email, cancellationToken);
+      if (!noOpResponse.IsSuccessStatusCode)
+      {
+        var noOpContent = await noOpResponse.Content.ReadAsStringAsync(cancellationToken);
+        logger.LogWarning(
+          "NoOpRequest fallita con status {StatusCode} per {Account}. Risposta: {Response}",
+          noOpResponse.StatusCode,
+          settings.Email,
+          SanitizeDiagnosticResponse(noOpContent));
+        return new ConnectionDiagnosticResult(false, $"Login riuscito, ma NoOpRequest fallita: HTTP {(int)noOpResponse.StatusCode}.", settings.Email, null);
+      }
+
       var getInfoResponse = await PostGetInfoAsync(httpClient, soapUri, settings.Email, cancellationToken);
       if (!getInfoResponse.IsSuccessStatusCode)
       {
-        logger.LogWarning("GetInfoRequest fallita con status {StatusCode} per {Account}.", getInfoResponse.StatusCode, settings.Email);
-        return new ConnectionDiagnosticResult(false, $"Login riuscito, ma GetInfoRequest fallita: HTTP {(int)getInfoResponse.StatusCode}.", settings.Email, null);
+        var getInfoErrorContent = await getInfoResponse.Content.ReadAsStringAsync(cancellationToken);
+        logger.LogWarning(
+          "GetInfoRequest opzionale fallita con status {StatusCode} per {Account}. Risposta: {Response}",
+          getInfoResponse.StatusCode,
+          settings.Email,
+          SanitizeDiagnosticResponse(getInfoErrorContent));
+        logger.LogInformation("Test connessione Carbonio riuscito tramite NoOpRequest per {Account}.", settings.Email);
+        return new ConnectionDiagnosticResult(true, $"Login Carbonio Auth e NoOpRequest completati. GetInfoRequest opzionale fallita con HTTP {(int)getInfoResponse.StatusCode}.", settings.Email, null);
       }
 
       var content = await getInfoResponse.Content.ReadAsStringAsync(cancellationToken);
       if (content.Contains("Fault", StringComparison.OrdinalIgnoreCase))
       {
-        return new ConnectionDiagnosticResult(false, "Login riuscito, ma GetInfoRequest ha restituito un fault SOAP.", settings.Email, null);
+        logger.LogWarning("GetInfoRequest opzionale ha restituito un fault SOAP per {Account}.", settings.Email);
+        logger.LogInformation("Test connessione Carbonio riuscito tramite NoOpRequest per {Account}.", settings.Email);
+        return new ConnectionDiagnosticResult(true, "Login Carbonio Auth e NoOpRequest completati. GetInfoRequest opzionale ha restituito un fault SOAP.", settings.Email, null);
       }
 
       var serverVersion = TryReadStringProperty(content, "version");
@@ -105,6 +125,40 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
       logger.LogWarning(ex, "Timeout durante test connessione Carbonio per {Account}.", settings.Email);
       return new ConnectionDiagnosticResult(false, "Timeout durante il test connessione.", null, null);
     }
+  }
+
+  private static Task<HttpResponseMessage> PostNoOpAsync(HttpClient httpClient, Uri soapUri, string account, CancellationToken cancellationToken)
+  {
+    var endpoint = new Uri($"{soapUri.ToString().TrimEnd('/')}/NoOpRequest");
+    var payload = new
+    {
+      Body = new
+      {
+        NoOpRequest = new
+        {
+          _jsns = "urn:zimbraMail"
+        }
+      },
+      Header = new
+      {
+        context = new
+        {
+          _jsns = "urn:zimbra",
+          account = new
+          {
+            by = "name",
+            _content = account
+          },
+          userAgent = new
+          {
+            name = "CarbonioMailArchiver",
+            version = "PhaseB-Diagnostic"
+          }
+        }
+      }
+    };
+
+    return httpClient.PostAsJsonAsync(endpoint, payload, cancellationToken);
   }
 
   private static Task<HttpResponseMessage> PostGetInfoAsync(HttpClient httpClient, Uri soapUri, string account, CancellationToken cancellationToken)
@@ -152,6 +206,25 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
     {
       return null;
     }
+  }
+
+  private static string SanitizeDiagnosticResponse(string response)
+  {
+    if (string.IsNullOrWhiteSpace(response))
+    {
+      return "<vuota>";
+    }
+
+    var compact = response
+      .Replace("\r", string.Empty, StringComparison.Ordinal)
+      .Replace("\n", " ", StringComparison.Ordinal);
+
+    if (compact.Length > 500)
+    {
+      compact = compact[..500] + "...";
+    }
+
+    return compact;
   }
 
   private static string? FindStringProperty(JsonElement element, string propertyName)
