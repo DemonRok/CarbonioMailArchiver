@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using CarbonioMailArchiver.Core.Abstractions;
 using CarbonioMailArchiver.Core.Models;
@@ -9,82 +7,24 @@ namespace CarbonioMailArchiver.Infrastructure.Services;
 
 public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnectionDiagnosticService> logger) : IConnectionDiagnosticService
 {
-  private static readonly JsonSerializerOptions JsonSerializerOptions = new()
-  {
-    PropertyNamingPolicy = null
-  };
-
   public async Task<ConnectionDiagnosticResult> TestConnectionAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken)
   {
-    if (settings.AcceptUntrustedCertificates)
+    using var client = CarbonioWebClient.Create(settings, out var validationError);
+    if (validationError is not null)
     {
-      return new ConnectionDiagnosticResult(false, "Certificati TLS non attendibili bloccati: installare la CA corretta nel trust store Windows.", null, null);
+      return new ConnectionDiagnosticResult(false, validationError, null, null);
     }
-
-    if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out var baseUri))
-    {
-      return new ConnectionDiagnosticResult(false, "Base URL non valido.", null, null);
-    }
-
-    if (!Uri.TryCreate(settings.SoapUrl, UriKind.Absolute, out var soapUri))
-    {
-      return new ConnectionDiagnosticResult(false, "SOAP URL non valido.", null, null);
-    }
-
-    if (string.IsNullOrWhiteSpace(settings.Email))
-    {
-      return new ConnectionDiagnosticResult(false, "Account email mancante.", null, null);
-    }
-
-    if (string.IsNullOrEmpty(password))
-    {
-      return new ConnectionDiagnosticResult(false, "Password mancante.", null, null);
-    }
-
-    var cookies = new CookieContainer();
-    using var handler = new HttpClientHandler
-    {
-      CookieContainer = cookies,
-      UseCookies = true
-    };
-
-    using var httpClient = new HttpClient(handler)
-    {
-      BaseAddress = baseUri,
-      Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 5, 600))
-    };
-
-    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "*/*");
-    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("X-Service", "WebUI");
-    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("X-Device-Id", Guid.NewGuid().ToString());
-    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("X-Device-Model", "CarbonioMailArchiver");
 
     try
     {
-      var loginResponse = await PostJsonAsync(
-        httpClient,
-        "/zx/auth/v2/login",
-        new
-        {
-          auth_method = "password",
-          user = settings.Email,
-          password
-        },
-        cancellationToken);
-
-      if (!loginResponse.IsSuccessStatusCode)
+      var loginError = await client.LoginAsync(password, cancellationToken);
+      if (loginError is not null)
       {
-        logger.LogWarning("Login Carbonio Auth fallito con status {StatusCode} per {Account}.", loginResponse.StatusCode, settings.Email);
-        return new ConnectionDiagnosticResult(false, $"Login fallito: HTTP {(int)loginResponse.StatusCode}.", null, null);
+        logger.LogWarning("Login Carbonio Auth fallito per {Account}: {Reason}", settings.Email, loginError);
+        return new ConnectionDiagnosticResult(false, loginError, null, null);
       }
 
-      var loginCookies = cookies.GetCookies(baseUri);
-      if (loginCookies["ZX_AUTH_TOKEN"] is null && loginCookies["ZM_AUTH_TOKEN"] is null)
-      {
-        return new ConnectionDiagnosticResult(false, "Login completato ma nessun cookie ZX_AUTH_TOKEN/ZM_AUTH_TOKEN ricevuto.", null, null);
-      }
-
-      var noOpResponse = await PostNoOpAsync(httpClient, soapUri, settings.Email, cancellationToken);
+      var noOpResponse = await client.PostNoOpAsync(cancellationToken);
       if (!noOpResponse.IsSuccessStatusCode)
       {
         var noOpContent = await noOpResponse.Content.ReadAsStringAsync(cancellationToken);
@@ -96,7 +36,7 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
         return new ConnectionDiagnosticResult(false, $"Login riuscito, ma NoOpRequest fallita: HTTP {(int)noOpResponse.StatusCode}.", settings.Email, null);
       }
 
-      var getInfoResponse = await PostGetInfoAsync(httpClient, soapUri, settings.Email, cancellationToken);
+      var getInfoResponse = await client.PostGetInfoAsync(cancellationToken);
       if (!getInfoResponse.IsSuccessStatusCode)
       {
         var getInfoErrorContent = await getInfoResponse.Content.ReadAsStringAsync(cancellationToken);
@@ -133,100 +73,7 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
     }
   }
 
-  private static Task<HttpResponseMessage> PostNoOpAsync(HttpClient httpClient, Uri soapUri, string account, CancellationToken cancellationToken)
-  {
-    var endpoint = new Uri($"{soapUri.ToString().TrimEnd('/')}/NoOpRequest");
-    var payload = new
-    {
-      Body = new
-      {
-        NoOpRequest = new
-        {
-          _jsns = "urn:zimbraMail"
-        }
-      },
-      Header = new
-      {
-        context = new
-        {
-          _jsns = "urn:zimbra",
-          account = new
-          {
-            by = "name",
-            _content = account
-          },
-          userAgent = new
-          {
-            name = "CarbonioMailArchiver",
-            version = "PhaseB-Diagnostic"
-          }
-        }
-      }
-    };
-
-    return PostJsonAsync(httpClient, endpoint, payload, cancellationToken);
-  }
-
-  private static Task<HttpResponseMessage> PostGetInfoAsync(HttpClient httpClient, Uri soapUri, string account, CancellationToken cancellationToken)
-  {
-    var endpoint = new Uri($"{soapUri.ToString().TrimEnd('/')}/GetInfoRequest");
-    var payload = new
-    {
-      Body = new
-      {
-        GetInfoRequest = new
-        {
-          _jsns = "urn:zimbraAccount"
-        }
-      },
-      Header = new
-      {
-        context = new
-        {
-          _jsns = "urn:zimbra",
-          account = new
-          {
-            by = "name",
-            _content = account
-          },
-          userAgent = new
-          {
-            name = "CarbonioMailArchiver",
-            version = "PhaseB-Diagnostic"
-          }
-        }
-      }
-    };
-
-    return PostJsonAsync(httpClient, endpoint, payload, cancellationToken);
-  }
-
-  private static Task<HttpResponseMessage> PostJsonAsync(HttpClient httpClient, string requestUri, object payload, CancellationToken cancellationToken)
-  {
-    return PostJsonAsync(httpClient, new Uri(requestUri, UriKind.RelativeOrAbsolute), payload, cancellationToken);
-  }
-
-  private static async Task<HttpResponseMessage> PostJsonAsync(HttpClient httpClient, Uri requestUri, object payload, CancellationToken cancellationToken)
-  {
-    var json = JsonSerializer.Serialize(payload, JsonSerializerOptions);
-    using var content = new StringContent(json, Encoding.UTF8, "application/json");
-    return await httpClient.PostAsync(requestUri, content, cancellationToken);
-  }
-
-  private static string? TryReadStringProperty(string json, string propertyName)
-  {
-    try
-    {
-      using var document = JsonDocument.Parse(json);
-      return FindStringProperty(document.RootElement, propertyName);
-    }
-    catch (JsonException)
-    {
-      return null;
-    }
-  }
-
-  private static string SanitizeDiagnosticResponse(string response)
+  internal static string SanitizeDiagnosticResponse(string response)
   {
     if (string.IsNullOrWhiteSpace(response))
     {
@@ -243,6 +90,19 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
     }
 
     return compact;
+  }
+
+  private static string? TryReadStringProperty(string json, string propertyName)
+  {
+    try
+    {
+      using var document = JsonDocument.Parse(json);
+      return FindStringProperty(document.RootElement, propertyName);
+    }
+    catch (JsonException)
+    {
+      return null;
+    }
   }
 
   private static string? FindStringProperty(JsonElement element, string propertyName)

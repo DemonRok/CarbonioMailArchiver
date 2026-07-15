@@ -16,12 +16,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly ICredentialStore _credentialStore;
   private readonly IOperationLogService _operationLogService;
   private readonly IConnectionDiagnosticService _connectionDiagnosticService;
+  private readonly ISearchDiagnosticService _searchDiagnosticService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
   private string _email = string.Empty;
   private string _password = string.Empty;
   private string _recentLogText = string.Empty;
+  private string _searchBeforeDate = DateTime.Today.ToString("yyyy-MM-dd");
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
@@ -32,17 +34,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     ICredentialStore credentialStore,
     IOperationLogService operationLogService,
     IConnectionDiagnosticService connectionDiagnosticService,
+    ISearchDiagnosticService searchDiagnosticService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
     _credentialStore = credentialStore;
     _operationLogService = operationLogService;
     _connectionDiagnosticService = connectionDiagnosticService;
+    _searchDiagnosticService = searchDiagnosticService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
     SaveCommand = new AsyncRelayCommand(SaveAsync);
     TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
+    TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     LogDirectory = operationLogService.LogDirectory;
@@ -53,6 +58,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand LoadCommand { get; }
   public ICommand SaveCommand { get; }
   public ICommand TestConnectionCommand { get; }
+  public ICommand TestSearchCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
@@ -86,6 +92,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _recentLogText;
     private set => SetField(ref _recentLogText, value);
+  }
+
+  public string SearchBeforeDate
+  {
+    get => _searchBeforeDate;
+    set => SetField(ref _searchBeforeDate, value);
   }
 
   public bool RememberCredentials
@@ -148,45 +160,51 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private async Task TestConnectionAsync()
   {
     var settings = ToSettings();
-    var issues = new List<string>();
-
-    if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _))
+    var validationError = ValidateConnectionFields(settings);
+    if (validationError is not null)
     {
-      issues.Add("Base URL non valido.");
-    }
-
-    if (!Uri.TryCreate(settings.SoapUrl, UriKind.Absolute, out _))
-    {
-      issues.Add("SOAP URL non valido.");
-    }
-
-    if (string.IsNullOrWhiteSpace(settings.Email))
-    {
-      issues.Add("Account email mancante.");
-    }
-
-    if (settings.AcceptUntrustedCertificates)
-    {
-      issues.Add("Certificati TLS non attendibili non accettati in Fase A.");
-    }
-
-    if (issues.Count > 0)
-    {
-      StatusMessage = string.Join(" ", issues);
+      StatusMessage = validationError;
       return;
     }
 
-    var password = Password;
-    if (string.IsNullOrEmpty(password) && settings.RememberCredentials)
-    {
-      password = await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty;
-    }
+    var password = await GetPasswordAsync(settings);
 
     StatusMessage = "Test connessione in corso...";
     var result = await _connectionDiagnosticService.TestConnectionAsync(settings, password, CancellationToken.None);
     StatusMessage = result.IsSuccess
       ? $"{result.Message} Account: {result.AccountName}. Versione: {result.ServerVersion ?? "non rilevata"}."
       : result.Message;
+    await RefreshLogsAsync();
+  }
+
+  private async Task TestSearchAsync()
+  {
+    var settings = ToSettings();
+    var validationError = ValidateConnectionFields(settings);
+    if (validationError is not null)
+    {
+      StatusMessage = validationError;
+      return;
+    }
+
+    if (!DateOnly.TryParse(SearchBeforeDate, out var beforeDate))
+    {
+      StatusMessage = "Data ricerca non valida. Usa formato yyyy-MM-dd.";
+      return;
+    }
+
+    var password = await GetPasswordAsync(settings);
+    var request = new MailSearchRequest(beforeDate, 10);
+    StatusMessage = "Ricerca diagnostica in corso...";
+    var result = await _searchDiagnosticService.SearchInboxBeforeAsync(settings, password, request, CancellationToken.None);
+    if (!result.IsSuccess)
+    {
+      StatusMessage = result.Message;
+      await RefreshLogsAsync();
+      return;
+    }
+
+    StatusMessage = $"{result.Message} Totale dichiarato: {result.TotalCount?.ToString() ?? "non rilevato"}. Altri risultati: {(result.HasMore ? "si" : "no")}.";
     await RefreshLogsAsync();
   }
 
@@ -225,6 +243,45 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600)
     };
+  }
+
+  private async Task<string> GetPasswordAsync(CarbonioConnectionSettings settings)
+  {
+    if (!string.IsNullOrEmpty(Password))
+    {
+      return Password;
+    }
+
+    return settings.RememberCredentials
+      ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty
+      : string.Empty;
+  }
+
+  private static string? ValidateConnectionFields(CarbonioConnectionSettings settings)
+  {
+    var issues = new List<string>();
+
+    if (!Uri.TryCreate(settings.BaseUrl, UriKind.Absolute, out _))
+    {
+      issues.Add("Base URL non valido.");
+    }
+
+    if (!Uri.TryCreate(settings.SoapUrl, UriKind.Absolute, out _))
+    {
+      issues.Add("SOAP URL non valido.");
+    }
+
+    if (string.IsNullOrWhiteSpace(settings.Email))
+    {
+      issues.Add("Account email mancante.");
+    }
+
+    if (settings.AcceptUntrustedCertificates)
+    {
+      issues.Add("Certificati TLS non attendibili non accettati.");
+    }
+
+    return issues.Count == 0 ? null : string.Join(" ", issues);
   }
 
   private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

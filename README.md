@@ -20,8 +20,9 @@ Fase B diagnostica avviata:
 - login reale tramite `POST /zx/auth/v2/login`;
 - cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
 - test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- pulsante UI "Test connessione";
-- nessuna ricerca o spostamento email ancora implementati.
+- test ricerca in sola lettura con `SearchRequest`, limite 10 messaggi;
+- pulsanti UI "Test connessione" e "Test ricerca";
+- nessuno spostamento email ancora implementato.
 
 ## Struttura
 
@@ -42,7 +43,7 @@ Chiamate SOAP/API verificate o da verificare in Fase B:
 
 - `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
 - `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- `SearchRequest` con query equivalente a `in:inbox before:yyyy/MM/dd`;
+- `SearchRequest` diagnostica con query equivalente a `in:inbox before:yyyy/MM/dd`;
 - `FolderActionRequest` o chiamata equivalente per creare la cartella archivio sotto Inbox;
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
 - `GetFolderRequest` per leggere ID, permessi e struttura cartelle.
@@ -73,7 +74,7 @@ Informazioni reali necessarie dal server prima della Fase B:
 
 ## Fase B non inclusa
 
-La diagnostica Fase B implementa solo login e `GetInfoRequest`. Non implementa ancora ricerca, creazione cartelle, spostamento messaggi o export CSV operativo. I servizi relativi restano registrati come placeholder espliciti.
+La diagnostica Fase B implementa login, `NoOpRequest` e `SearchRequest` in sola lettura con limite basso. Non implementa ancora creazione cartelle, spostamento messaggi o export CSV operativo. I servizi relativi restano registrati come placeholder espliciti.
 
 ## Build
 

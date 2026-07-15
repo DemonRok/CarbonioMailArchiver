@@ -6,6 +6,8 @@ public sealed record CarbonioSession(string Account, Uri SoapEndpoint, string Au
 
 public sealed record ConnectionDiagnosticResult(bool IsSuccess, string Message, string? AccountName, string? ServerVersion);
 
+public sealed record SearchDiagnosticResult(bool IsSuccess, string Message, IReadOnlyList<MailMessageSummary> Messages, int? TotalCount, bool HasMore);
+
 public sealed class MailFolder
 {
   public string Id { get; set; } = string.Empty;

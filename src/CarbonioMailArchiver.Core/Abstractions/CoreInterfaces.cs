@@ -19,6 +19,11 @@ public interface IConnectionDiagnosticService
   Task<ConnectionDiagnosticResult> TestConnectionAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken);
 }
 
+public interface ISearchDiagnosticService
+{
+  Task<SearchDiagnosticResult> SearchInboxBeforeAsync(CarbonioConnectionSettings settings, string password, MailSearchRequest request, CancellationToken cancellationToken);
+}
+
 public interface IMailSearchService
 {
   Task<MailSearchResult> SearchAsync(CarbonioSession session, MailSearchRequest request, CancellationToken cancellationToken);
