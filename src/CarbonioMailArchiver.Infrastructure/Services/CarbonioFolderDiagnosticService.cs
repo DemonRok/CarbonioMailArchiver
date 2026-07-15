@@ -13,14 +13,14 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
     if (validationError is not null)
     {
       logger.LogWarning("GetFolderRequest diagnostica non avviata per {Account}: {Reason}", settings.Email, validationError);
-      return new Dictionary<string, MailFolder>();
+      return CreateKnownFolders();
     }
 
     var loginError = await client.LoginAsync(password, cancellationToken);
     if (loginError is not null)
     {
       logger.LogWarning("Login Carbonio Auth fallito per GetFolderRequest {Account}: {Reason}", settings.Email, loginError);
-      return new Dictionary<string, MailFolder>();
+      return CreateKnownFolders();
     }
 
     var response = await client.PostGetFolderAsync(cancellationToken);
@@ -32,7 +32,7 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
         response.StatusCode,
         settings.Email,
         CarbonioConnectionDiagnosticService.SanitizeDiagnosticResponse(content));
-      return new Dictionary<string, MailFolder>();
+      return CreateKnownFolders();
     }
 
     try
@@ -44,7 +44,7 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
     catch (JsonException ex)
     {
       logger.LogWarning(ex, "Parsing GetFolderRequest fallito per {Account}.", settings.Email);
-      return new Dictionary<string, MailFolder>();
+      return CreateKnownFolders();
     }
   }
 
@@ -59,6 +59,19 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
     var foldersById = new Dictionary<string, MailFolder>();
     ParseFolderElement(rootFolder, null, string.Empty, foldersById);
     return foldersById;
+  }
+
+  private static IReadOnlyDictionary<string, MailFolder> CreateKnownFolders()
+  {
+    return new Dictionary<string, MailFolder>
+    {
+      ["1"] = new MailFolder { Id = "1", Name = "USER_ROOT", AbsolutePath = "/USER_ROOT", IsWritable = false },
+      ["2"] = new MailFolder { Id = "2", Name = "Inbox", AbsolutePath = "/Inbox", ParentId = "1", IsInbox = true },
+      ["3"] = new MailFolder { Id = "3", Name = "Trash", AbsolutePath = "/Trash", ParentId = "1" },
+      ["4"] = new MailFolder { Id = "4", Name = "Junk", AbsolutePath = "/Junk", ParentId = "1" },
+      ["5"] = new MailFolder { Id = "5", Name = "Sent", AbsolutePath = "/Sent", ParentId = "1" },
+      ["6"] = new MailFolder { Id = "6", Name = "Drafts", AbsolutePath = "/Drafts", ParentId = "1" }
+    };
   }
 
   private static MailFolder? ParseFolderElement(JsonElement element, string? parentId, string parentPath, Dictionary<string, MailFolder> foldersById)

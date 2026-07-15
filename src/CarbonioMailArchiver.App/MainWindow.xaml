@@ -34,6 +34,8 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -58,14 +60,33 @@
                     <TextBlock Grid.Row="7" Text="Cerca prima del" VerticalAlignment="Center" Margin="0,0,12,12" />
                     <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
 
-                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
+                    <TextBlock Grid.Row="8" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <ComboBox Grid.Row="8" Grid.Column="1"
+                              ItemsSource="{Binding AvailableFolders}"
+                              SelectedItem="{Binding SelectedSourceFolder}"
+                              DisplayMemberPath="DisplayName"
+                              MinWidth="340"
+                              HorizontalAlignment="Left"
+                              Margin="0,0,0,12" />
+
+                    <TextBlock Grid.Row="9" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <ComboBox Grid.Row="9" Grid.Column="1"
+                              ItemsSource="{Binding AvailableFolders}"
+                              SelectedItem="{Binding SelectedDestinationFolder}"
+                              DisplayMemberPath="DisplayName"
+                              MinWidth="340"
+                              HorizontalAlignment="Left"
+                              Margin="0,0,0,12" />
+
+                    <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
                         <Button Content="Carica" Command="{Binding LoadCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
+                        <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,0" />
                         <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" />
                     </StackPanel>
 
-                    <DataGrid Grid.Row="9"
+                    <DataGrid Grid.Row="11"
                               Grid.ColumnSpan="2"
                               ItemsSource="{Binding PreviewMessages}"
                               AutoGenerateColumns="False"

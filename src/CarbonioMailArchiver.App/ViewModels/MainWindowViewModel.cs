@@ -17,6 +17,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly IOperationLogService _operationLogService;
   private readonly IConnectionDiagnosticService _connectionDiagnosticService;
   private readonly ISearchDiagnosticService _searchDiagnosticService;
+  private readonly IFolderDiagnosticService _folderDiagnosticService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
@@ -25,6 +26,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _recentLogText = string.Empty;
   private string _searchBeforeDate = DateTime.Today.ToString("yyyy-MM-dd");
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
+  private FolderSelectionViewModel? _selectedSourceFolder;
+  private FolderSelectionViewModel? _selectedDestinationFolder;
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
   private int _timeoutSeconds = 100;
@@ -35,6 +38,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IOperationLogService operationLogService,
     IConnectionDiagnosticService connectionDiagnosticService,
     ISearchDiagnosticService searchDiagnosticService,
+    IFolderDiagnosticService folderDiagnosticService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
@@ -42,11 +46,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _operationLogService = operationLogService;
     _connectionDiagnosticService = connectionDiagnosticService;
     _searchDiagnosticService = searchDiagnosticService;
+    _folderDiagnosticService = folderDiagnosticService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
     SaveCommand = new AsyncRelayCommand(SaveAsync);
     TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
+    LoadFoldersCommand = new AsyncRelayCommand(LoadFoldersAsync);
     TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
@@ -58,11 +64,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand LoadCommand { get; }
   public ICommand SaveCommand { get; }
   public ICommand TestConnectionCommand { get; }
+  public ICommand LoadFoldersCommand { get; }
   public ICommand TestSearchCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
+  public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public string LogDirectory { get; }
 
   public string BaseUrl
@@ -99,6 +107,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _searchBeforeDate;
     set => SetField(ref _searchBeforeDate, value);
+  }
+
+  public FolderSelectionViewModel? SelectedSourceFolder
+  {
+    get => _selectedSourceFolder;
+    set => SetField(ref _selectedSourceFolder, value);
+  }
+
+  public FolderSelectionViewModel? SelectedDestinationFolder
+  {
+    get => _selectedDestinationFolder;
+    set => SetField(ref _selectedDestinationFolder, value);
   }
 
   public bool RememberCredentials
@@ -178,6 +198,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     await RefreshLogsAsync();
   }
 
+  private async Task LoadFoldersAsync()
+  {
+    var settings = ToSettings();
+    var validationError = ValidateConnectionFields(settings);
+    if (validationError is not null)
+    {
+      StatusMessage = validationError;
+      return;
+    }
+
+    var password = await GetPasswordAsync(settings);
+    StatusMessage = "Caricamento cartelle in corso...";
+    var foldersById = await _folderDiagnosticService.GetFoldersByIdAsync(settings, password, CancellationToken.None);
+    AvailableFolders.Clear();
+
+    foreach (var folder in foldersById.Values.OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase))
+    {
+      AvailableFolders.Add(new FolderSelectionViewModel(folder));
+    }
+
+    SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == "2") ?? AvailableFolders.FirstOrDefault();
+    SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id) ?? SelectedSourceFolder;
+    StatusMessage = AvailableFolders.Count == 0
+      ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
+      : $"Cartelle caricate: {AvailableFolders.Count}.";
+    await RefreshLogsAsync();
+  }
+
   private async Task TestSearchAsync()
   {
     var settings = ToSettings();
@@ -195,7 +243,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var password = await GetPasswordAsync(settings);
-    var request = new MailSearchRequest(beforeDate, 10);
+    var sourceFolderQuery = SelectedSourceFolder is null ? "in:inbox" : $"inid:{SelectedSourceFolder.Id}";
+    var request = new MailSearchRequest(beforeDate, 10, sourceFolderQuery);
     PreviewMessages.Clear();
     StatusMessage = "Ricerca diagnostica in corso...";
     var result = await _searchDiagnosticService.SearchInboxBeforeAsync(settings, password, request, CancellationToken.None);

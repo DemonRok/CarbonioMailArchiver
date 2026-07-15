@@ -21,6 +21,7 @@ Fase B diagnostica avviata:
 - cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
 - test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
 - test ricerca in sola lettura con `SearchRequest`, limite 10 messaggi;
+- caricamento cartelle e selezione sorgente/destinazione in UI;
 - pulsanti UI "Test connessione" e "Test ricerca";
 - nessuno spostamento email ancora implementato.
 
@@ -44,6 +45,7 @@ Chiamate SOAP/API verificate o da verificare in Fase B:
 - `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
 - `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
 - `SearchRequest` diagnostica con query equivalente a `in:inbox before:dd/MM/yyyy`;
+- `SearchRequest` su cartella scelta con query equivalente a `inid:<folderId> before:dd/MM/yyyy`;
 - `FolderActionRequest` o chiamata equivalente per creare la cartella archivio sotto Inbox;
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
 - `GetFolderRequest` per leggere ID, permessi e struttura cartelle.
