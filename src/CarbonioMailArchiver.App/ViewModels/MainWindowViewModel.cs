@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Input;
 using CarbonioMailArchiver.Core.Abstractions;
 using CarbonioMailArchiver.Core.Models;
@@ -20,6 +21,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _soapUrl = string.Empty;
   private string _email = string.Empty;
   private string _password = string.Empty;
+  private string _recentLogText = string.Empty;
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
@@ -42,6 +44,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     SaveCommand = new AsyncRelayCommand(SaveAsync);
     TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
+    CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     LogDirectory = operationLogService.LogDirectory;
   }
 
@@ -51,6 +54,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand SaveCommand { get; }
   public ICommand TestConnectionCommand { get; }
   public ICommand RefreshLogsCommand { get; }
+  public ICommand CopyLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public string LogDirectory { get; }
 
@@ -76,6 +80,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _password;
     set => SetField(ref _password, value);
+  }
+
+  public string RecentLogText
+  {
+    get => _recentLogText;
+    private set => SetField(ref _recentLogText, value);
   }
 
   public bool RememberCredentials
@@ -188,6 +198,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       RecentLogLines.Add(line);
     }
+
+    RecentLogText = string.Join(Environment.NewLine, lines);
+  }
+
+  private Task CopyLogsAsync()
+  {
+    if (!string.IsNullOrWhiteSpace(RecentLogText))
+    {
+      Clipboard.SetText(RecentLogText);
+      StatusMessage = "Log copiato negli appunti.";
+    }
+
+    return Task.CompletedTask;
   }
 
   private CarbonioConnectionSettings ToSettings()
