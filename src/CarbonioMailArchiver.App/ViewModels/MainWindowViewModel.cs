@@ -62,7 +62,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
-  public ObservableCollection<MailMessageSummary> PreviewMessages { get; } = [];
+  public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public string LogDirectory { get; }
 
   public string BaseUrl
@@ -208,7 +208,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     foreach (var message in result.Messages)
     {
-      PreviewMessages.Add(message);
+      PreviewMessages.Add(new MailMessagePreviewViewModel(message, result.FoldersById));
     }
 
     StatusMessage = $"{result.Message} Totale dichiarato: {result.TotalCount?.ToString() ?? "non rilevato"}. Altri risultati: {(result.HasMore ? "si" : "no")}.";

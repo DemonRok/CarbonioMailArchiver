@@ -7,7 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace CarbonioMailArchiver.Infrastructure.Services;
 
-public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagnosticService> logger) : ISearchDiagnosticService
+public sealed class CarbonioSearchDiagnosticService(
+  IFolderDiagnosticService folderDiagnosticService,
+  ILogger<CarbonioSearchDiagnosticService> logger) : ISearchDiagnosticService
 {
   private readonly MailQueryBuilder _queryBuilder = new();
 
@@ -16,7 +18,7 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
     using var client = CarbonioWebClient.Create(settings, out var validationError);
     if (validationError is not null)
     {
-      return new SearchDiagnosticResult(false, validationError, [], null, false);
+        return new SearchDiagnosticResult(false, validationError, [], null, false, new Dictionary<string, MailFolder>());
     }
 
     try
@@ -25,7 +27,7 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
       if (loginError is not null)
       {
         logger.LogWarning("Login Carbonio Auth fallito per ricerca diagnostica {Account}: {Reason}", settings.Email, loginError);
-        return new SearchDiagnosticResult(false, loginError, [], null, false);
+        return new SearchDiagnosticResult(false, loginError, [], null, false, new Dictionary<string, MailFolder>());
       }
 
       var query = _queryBuilder.BuildInboxBeforeQuery(request);
@@ -39,7 +41,7 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
           response.StatusCode,
           settings.Email,
           CarbonioConnectionDiagnosticService.SanitizeDiagnosticResponse(content));
-        return new SearchDiagnosticResult(false, $"SearchRequest fallita: HTTP {(int)response.StatusCode}.", [], null, false);
+        return new SearchDiagnosticResult(false, $"SearchRequest fallita: HTTP {(int)response.StatusCode}.", [], null, false, new Dictionary<string, MailFolder>());
       }
 
       if (content.Contains("\"Fault\"", StringComparison.OrdinalIgnoreCase))
@@ -48,10 +50,11 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
           "SearchRequest diagnostica ha restituito un fault per {Account}. Risposta: {Response}",
           settings.Email,
           CarbonioConnectionDiagnosticService.SanitizeDiagnosticResponse(content));
-        return new SearchDiagnosticResult(false, "SearchRequest ha restituito un fault SOAP.", [], null, false);
+        return new SearchDiagnosticResult(false, "SearchRequest ha restituito un fault SOAP.", [], null, false, new Dictionary<string, MailFolder>());
       }
 
-      var result = ParseSearchResult(content);
+      var foldersById = await folderDiagnosticService.GetFoldersByIdAsync(settings, password, cancellationToken);
+      var result = ParseSearchResult(content, foldersById);
       logger.LogInformation(
         "SearchRequest diagnostica riuscita per {Account}. Query: {Query}. Messaggi: {Count}.",
         settings.Email,
@@ -62,26 +65,26 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
     catch (HttpRequestException ex)
     {
       logger.LogWarning(ex, "Errore HTTP durante SearchRequest diagnostica per {Account}.", settings.Email);
-      return new SearchDiagnosticResult(false, $"Errore HTTP: {ex.Message}", [], null, false);
+      return new SearchDiagnosticResult(false, $"Errore HTTP: {ex.Message}", [], null, false, new Dictionary<string, MailFolder>());
     }
     catch (JsonException ex)
     {
       logger.LogWarning(ex, "Parsing risposta SearchRequest fallito per {Account}.", settings.Email);
-      return new SearchDiagnosticResult(false, $"Risposta SearchRequest non riconosciuta: {ex.Message}", [], null, false);
+      return new SearchDiagnosticResult(false, $"Risposta SearchRequest non riconosciuta: {ex.Message}", [], null, false, new Dictionary<string, MailFolder>());
     }
     catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
     {
       logger.LogWarning(ex, "Timeout durante SearchRequest diagnostica per {Account}.", settings.Email);
-      return new SearchDiagnosticResult(false, "Timeout durante la ricerca diagnostica.", [], null, false);
+      return new SearchDiagnosticResult(false, "Timeout durante la ricerca diagnostica.", [], null, false, new Dictionary<string, MailFolder>());
     }
   }
 
-  private static SearchDiagnosticResult ParseSearchResult(string json)
+  private static SearchDiagnosticResult ParseSearchResult(string json, IReadOnlyDictionary<string, MailFolder> foldersById)
   {
     using var document = JsonDocument.Parse(json);
     if (!TryFindProperty(document.RootElement, "SearchResponse", out var searchResponse))
     {
-      return new SearchDiagnosticResult(false, "Risposta SearchRequest senza SearchResponse.", [], null, false);
+      return new SearchDiagnosticResult(false, "Risposta SearchRequest senza SearchResponse.", [], null, false, foldersById);
     }
 
     var messages = new List<MailMessageSummary>();
@@ -102,7 +105,7 @@ public sealed class CarbonioSearchDiagnosticService(ILogger<CarbonioSearchDiagno
 
     var totalCount = ReadInt(searchResponse, "more") == 1 ? ReadInt(searchResponse, "total") : ReadInt(searchResponse, "num");
     var hasMore = ReadBool(searchResponse, "more");
-    return new SearchDiagnosticResult(true, $"SearchRequest completata. Messaggi letti: {messages.Count}.", messages, totalCount, hasMore);
+    return new SearchDiagnosticResult(true, $"SearchRequest completata. Messaggi letti: {messages.Count}.", messages, totalCount, hasMore, foldersById);
   }
 
   private static MailMessageSummary ParseMessage(JsonElement item)

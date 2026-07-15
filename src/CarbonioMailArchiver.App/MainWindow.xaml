@@ -80,7 +80,8 @@
                             <DataGridTextColumn Header="Mittente" Binding="{Binding From}" Width="220" />
                             <DataGridTextColumn Header="Oggetto" Binding="{Binding Subject}" Width="*" />
                             <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="110" />
-                            <DataGridTextColumn Header="Cartella" Binding="{Binding FolderId}" Width="80" />
+                            <DataGridTextColumn Header="Cartella" Binding="{Binding FolderPath}" Width="160" />
+                            <DataGridTextColumn Header="Folder ID" Binding="{Binding FolderId}" Width="80" />
                             <DataGridTextColumn Header="Dim." Binding="{Binding Size}" Width="80" />
                         </DataGrid.Columns>
                     </DataGrid>
