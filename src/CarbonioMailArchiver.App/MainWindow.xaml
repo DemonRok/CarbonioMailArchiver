@@ -79,11 +79,11 @@
                               Margin="0,0,0,12" />
 
                     <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
-                        <Button Content="Carica" Command="{Binding LoadCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
                         <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,0" />
-                        <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" />
+                        <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,0" />
+                        <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" />
                     </StackPanel>
 
                     <DataGrid Grid.Row="11"

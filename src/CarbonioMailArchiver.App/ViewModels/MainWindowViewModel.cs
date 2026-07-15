@@ -54,6 +54,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
     LoadFoldersCommand = new AsyncRelayCommand(LoadFoldersAsync);
     TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
+    SimulateMoveCommand = new AsyncRelayCommand(SimulateMoveAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -67,6 +68,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand TestConnectionCommand { get; }
   public ICommand LoadFoldersCommand { get; }
   public ICommand TestSearchCommand { get; }
+  public ICommand SimulateMoveCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -271,6 +273,44 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     StatusMessage = $"{result.Message} Totale dichiarato: {result.TotalCount?.ToString() ?? "non rilevato"}. Altri risultati: {(result.HasMore ? "si" : "no")}.";
+    await RefreshLogsAsync();
+  }
+
+  private async Task SimulateMoveAsync()
+  {
+    if (PreviewMessages.Count == 0)
+    {
+      StatusMessage = "Nessun messaggio in preview. Esegui prima Test ricerca.";
+      return;
+    }
+
+    if (SelectedSourceFolder is null)
+    {
+      StatusMessage = "Seleziona una cartella sorgente.";
+      return;
+    }
+
+    if (SelectedDestinationFolder is null)
+    {
+      StatusMessage = "Seleziona una cartella destinazione.";
+      return;
+    }
+
+    if (SelectedSourceFolder.Id == SelectedDestinationFolder.Id)
+    {
+      StatusMessage = "Sorgente e destinazione devono essere diverse.";
+      return;
+    }
+
+    _logger.LogInformation(
+      "Simulazione spostamento: {Count} messaggi da {SourceFolder} ({SourceId}) a {DestinationFolder} ({DestinationId}).",
+      PreviewMessages.Count,
+      SelectedSourceFolder.AbsolutePath,
+      SelectedSourceFolder.Id,
+      SelectedDestinationFolder.AbsolutePath,
+      SelectedDestinationFolder.Id);
+
+    StatusMessage = $"Simulazione: {PreviewMessages.Count} messaggi verrebbero spostati da {SelectedSourceFolder.AbsolutePath} a {SelectedDestinationFolder.AbsolutePath}. Nessuna modifica eseguita.";
     await RefreshLogsAsync();
   }
 
