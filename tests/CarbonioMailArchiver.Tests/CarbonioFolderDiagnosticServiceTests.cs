@@ -11,18 +11,20 @@ public sealed class CarbonioFolderDiagnosticServiceTests
       {
         "Body": {
           "GetFolderResponse": {
-            "folder": {
+            "folder": [{
               "id": "1",
               "name": "USER_ROOT",
+              "absFolderPath": "/",
               "folder": [
-                { "id": "2", "name": "Inbox" },
+                { "id": "2", "name": "Inbox", "absFolderPath": "/Inbox" },
                 {
                   "id": "10",
                   "name": "Archivio",
-                  "folder": { "id": "11", "name": "2024" }
+                  "absFolderPath": "/Inbox/Archivio",
+                  "folder": { "id": "11", "name": "2024", "absFolderPath": "/Inbox/Archivio/2024" }
                 }
               ]
-            }
+            }]
           }
         }
       }
@@ -31,6 +33,6 @@ public sealed class CarbonioFolderDiagnosticServiceTests
     var folders = CarbonioFolderDiagnosticService.ParseFolders(json);
 
     Assert.True(folders["2"].IsInbox);
-    Assert.Equal("/USER_ROOT/Archivio/2024", folders["11"].AbsolutePath);
+    Assert.Equal("/Inbox/Archivio/2024", folders["11"].AbsolutePath);
   }
 }

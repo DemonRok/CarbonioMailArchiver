@@ -56,6 +56,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
+    ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
     LogDirectory = operationLogService.LogDirectory;
   }
 
@@ -68,6 +69,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand TestSearchCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
+  public ICommand ClearLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
@@ -145,6 +147,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private set => SetField(ref _statusMessage, value);
   }
 
+  public async Task InitializeAsync()
+  {
+    await LoadAsync();
+    await RefreshLogsAsync();
+  }
+
   private async Task LoadAsync()
   {
     var settings = await _configuration.LoadConnectionSettingsAsync(CancellationToken.None);
@@ -155,7 +163,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
     TimeoutSeconds = settings.TimeoutSeconds;
     Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
-    StatusMessage = "Configurazione caricata. La password salvata non viene mostrata nella UI.";
+    StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
+      ? "Configurazione caricata. Password protetta caricata da DPAPI."
+      : "Configurazione caricata.";
   }
 
   private async Task SaveAsync()
@@ -285,6 +295,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     return Task.CompletedTask;
+  }
+
+  private async Task ClearLogsAsync()
+  {
+    await _operationLogService.ClearAsync(CancellationToken.None);
+    RecentLogLines.Clear();
+    RecentLogText = string.Empty;
+    StatusMessage = "Log cancellato.";
   }
 
   private CarbonioConnectionSettings ToSettings()

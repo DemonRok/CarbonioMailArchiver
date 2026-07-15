@@ -9,7 +9,7 @@ public sealed class FolderSelectionViewModel
     Id = folder.Id;
     Name = folder.Name;
     AbsolutePath = folder.AbsolutePath;
-    DisplayName = $"{folder.AbsolutePath} ({folder.Id})";
+    DisplayName = folder.AbsolutePath;
   }
 
   public string Id { get; }

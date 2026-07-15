@@ -83,4 +83,15 @@ public sealed class OperationLogService : IOperationLogService
     var lines = await File.ReadAllLinesAsync(file, cancellationToken);
     return lines.TakeLast(maxLines).ToArray();
   }
+
+  public Task ClearAsync(CancellationToken cancellationToken)
+  {
+    foreach (var file in Directory.EnumerateFiles(LogDirectory, "carbonio-mail-archiver-*.log"))
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      File.Delete(file);
+    }
+
+    return Task.CompletedTask;
+  }
 }

@@ -38,6 +38,15 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
     try
     {
       var folders = ParseFolders(content);
+      if (folders.Count == 0)
+      {
+        logger.LogInformation(
+          "GetFolderRequest diagnostica senza cartelle riconosciute per {Account}. Uso fallback standard. Risposta: {Response}",
+          settings.Email,
+          CarbonioConnectionDiagnosticService.SanitizeDiagnosticResponse(content));
+        return CreateKnownFolders();
+      }
+
       logger.LogInformation("GetFolderRequest diagnostica riuscita per {Account}. Cartelle: {Count}.", settings.Email, folders.Count);
       return folders;
     }
@@ -57,7 +66,18 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
     }
 
     var foldersById = new Dictionary<string, MailFolder>();
-    ParseFolderElement(rootFolder, null, string.Empty, foldersById);
+    if (rootFolder.ValueKind == JsonValueKind.Array)
+    {
+      foreach (var folder in rootFolder.EnumerateArray())
+      {
+        ParseFolderElement(folder, null, string.Empty, foldersById);
+      }
+    }
+    else
+    {
+      ParseFolderElement(rootFolder, null, string.Empty, foldersById);
+    }
+
     return foldersById;
   }
 
@@ -88,7 +108,12 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
       return null;
     }
 
-    var absolutePath = string.IsNullOrEmpty(parentPath) ? $"/{name}" : $"{parentPath}/{name}";
+    var absolutePath = ReadString(element, "absFolderPath");
+    if (string.IsNullOrWhiteSpace(absolutePath))
+    {
+      absolutePath = string.IsNullOrEmpty(parentPath) ? $"/{name}" : $"{parentPath}/{name}";
+    }
+
     var folder = new MailFolder
     {
       Id = id,
@@ -101,13 +126,21 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
 
     foldersById[id] = folder;
 
-    if (TryFindDirectProperty(element, "folder", out var childFolders))
+    ParseChildren(element, "folder", id, absolutePath, foldersById, folder);
+    ParseChildren(element, "link", id, absolutePath, foldersById, folder);
+
+    return folder;
+  }
+
+  private static void ParseChildren(JsonElement element, string propertyName, string parentId, string parentPath, Dictionary<string, MailFolder> foldersById, MailFolder folder)
+  {
+    if (TryFindDirectProperty(element, propertyName, out var childFolders))
     {
       if (childFolders.ValueKind == JsonValueKind.Array)
       {
         foreach (var child in childFolders.EnumerateArray())
         {
-          var childFolder = ParseFolderElement(child, id, absolutePath, foldersById);
+          var childFolder = ParseFolderElement(child, parentId, parentPath, foldersById);
           if (childFolder is not null)
           {
             folder.Children.Add(childFolder);
@@ -116,15 +149,13 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
       }
       else if (childFolders.ValueKind == JsonValueKind.Object)
       {
-        var childFolder = ParseFolderElement(childFolders, id, absolutePath, foldersById);
+        var childFolder = ParseFolderElement(childFolders, parentId, parentPath, foldersById);
         if (childFolder is not null)
         {
           folder.Children.Add(childFolder);
         }
       }
     }
-
-    return folder;
   }
 
   private static bool TryFindProperty(JsonElement element, string propertyName, out JsonElement value)

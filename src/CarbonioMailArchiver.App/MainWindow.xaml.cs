@@ -12,6 +12,16 @@ public partial class MainWindow : Window
     _viewModel = viewModel;
     DataContext = viewModel;
     InitializeComponent();
+    Loaded += MainWindow_OnLoaded;
+  }
+
+  private async void MainWindow_OnLoaded(object sender, RoutedEventArgs e)
+  {
+    await _viewModel.InitializeAsync();
+    if (!string.IsNullOrEmpty(_viewModel.Password))
+    {
+      PasswordInput.Password = _viewModel.Password;
+    }
   }
 
   private void PasswordInput_OnPasswordChanged(object sender, RoutedEventArgs e)

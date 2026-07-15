@@ -118,6 +118,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                         <Button Content="Aggiorna" Command="{Binding RefreshLogsCommand}" Width="96" Margin="0,0,12,0" />
                         <Button Content="Copia tutto" Command="{Binding CopyLogsCommand}" Width="96" Margin="0,0,12,0" />
+                        <Button Content="Cancella log" Command="{Binding ClearLogsCommand}" Width="110" Margin="0,0,12,0" />
                         <TextBlock Text="{Binding LogDirectory}" VerticalAlignment="Center" Foreground="#555" />
                     </StackPanel>
                     <TextBox Grid.Row="1"

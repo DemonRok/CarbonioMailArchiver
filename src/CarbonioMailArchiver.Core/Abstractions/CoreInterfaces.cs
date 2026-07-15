@@ -55,6 +55,7 @@ public interface ICredentialStore
 public interface IOperationLogService
 {
   Task<IReadOnlyList<string>> ReadRecentLinesAsync(int maxLines, CancellationToken cancellationToken);
+  Task ClearAsync(CancellationToken cancellationToken);
   string LogDirectory { get; }
 }
 
