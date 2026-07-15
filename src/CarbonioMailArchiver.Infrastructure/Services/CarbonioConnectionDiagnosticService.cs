@@ -100,7 +100,7 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
       if (!getInfoResponse.IsSuccessStatusCode)
       {
         var getInfoErrorContent = await getInfoResponse.Content.ReadAsStringAsync(cancellationToken);
-        logger.LogWarning(
+        logger.LogInformation(
           "GetInfoRequest opzionale fallita con status {StatusCode} per {Account}. Risposta: {Response}",
           getInfoResponse.StatusCode,
           settings.Email,
@@ -112,7 +112,7 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
       var content = await getInfoResponse.Content.ReadAsStringAsync(cancellationToken);
       if (content.Contains("Fault", StringComparison.OrdinalIgnoreCase))
       {
-        logger.LogWarning("GetInfoRequest opzionale ha restituito un fault SOAP per {Account}.", settings.Email);
+        logger.LogInformation("GetInfoRequest opzionale ha restituito un fault SOAP per {Account}.", settings.Email);
         logger.LogInformation("Test connessione Carbonio riuscito tramite NoOpRequest per {Account}.", settings.Email);
         return new ConnectionDiagnosticResult(true, "Login Carbonio Auth e NoOpRequest completati. GetInfoRequest opzionale ha restituito un fault SOAP.", settings.Email, null);
       }
