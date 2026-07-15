@@ -14,6 +14,11 @@ public interface ICarbonioSoapClient
   Task<XDocument> SendAsync(CarbonioConnectionSettings settings, XDocument envelope, CancellationToken cancellationToken);
 }
 
+public interface IConnectionDiagnosticService
+{
+  Task<ConnectionDiagnosticResult> TestConnectionAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken);
+}
+
 public interface IMailSearchService
 {
   Task<MailSearchResult> SearchAsync(CarbonioSession session, MailSearchRequest request, CancellationToken cancellationToken);

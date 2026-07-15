@@ -56,7 +56,7 @@
                     <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,0">
                         <Button Content="Carica" Command="{Binding LoadCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
-                        <Button Content="Verifica Fase A" Command="{Binding ValidatePhaseACommand}" Width="130" />
+                        <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" />
                     </StackPanel>
                 </Grid>
             </TabItem>

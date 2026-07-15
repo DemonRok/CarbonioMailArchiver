@@ -16,6 +16,7 @@ public static class DependencyInjection
     services.AddSingleton<IOperationLogService, OperationLogService>();
     services.AddSingleton<IAuthenticationService, PhaseBPendingAuthenticationService>();
     services.AddSingleton<ICarbonioSoapClient, PhaseBPendingCarbonioSoapClient>();
+    services.AddSingleton<IConnectionDiagnosticService, CarbonioConnectionDiagnosticService>();
     services.AddSingleton<IMailSearchService, PhaseBPendingMailSearchService>();
     services.AddSingleton<IMailMoveService, PhaseBPendingMailMoveService>();
     services.AddSingleton<IFolderService, PhaseBPendingFolderService>();

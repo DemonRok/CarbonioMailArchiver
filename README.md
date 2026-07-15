@@ -15,6 +15,14 @@ Fase A completata:
 - modelli e interfacce principali del dominio;
 - test unitario iniziale per la costruzione query.
 
+Fase B diagnostica avviata:
+
+- login reale tramite `POST /zx/auth/v2/login`;
+- cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
+- test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
+- pulsante UI "Test connessione";
+- nessuna ricerca o spostamento email ancora implementati.
+
 ## Struttura
 
 ```text
@@ -30,9 +38,10 @@ tests/
 
 Gli endpoint SOAP possono variare tra installazioni Carbonio e tra provider. L'applicazione deve sempre eseguire prima il test di connessione e deve permettere la configurazione manuale dell'URL SOAP. L'abilitazione della voce CLI nella Admin UI non implica accesso SSH o disponibilita di comandi server-side.
 
-Chiamate SOAP presumibili da verificare in Fase B:
+Chiamate SOAP/API verificate o da verificare in Fase B:
 
-- `AuthRequest` su endpoint account SOAP, per ottenere auth token/sessione;
+- `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
+- `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
 - `SearchRequest` con query equivalente a `in:inbox before:yyyy/MM/dd`;
 - `FolderActionRequest` o chiamata equivalente per creare la cartella archivio sotto Inbox;
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
@@ -64,7 +73,7 @@ Informazioni reali necessarie dal server prima della Fase B:
 
 ## Fase B non inclusa
 
-La Fase A prepara l'applicazione, ma non implementa ancora autenticazione SOAP reale, ricerca, creazione cartelle, spostamento messaggi o export CSV operativo. I servizi relativi sono registrati come placeholder espliciti.
+La diagnostica Fase B implementa solo login e `GetInfoRequest`. Non implementa ancora ricerca, creazione cartelle, spostamento messaggi o export CSV operativo. I servizi relativi restano registrati come placeholder espliciti.
 
 ## Build
 

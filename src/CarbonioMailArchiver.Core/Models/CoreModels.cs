@@ -4,6 +4,8 @@ public sealed record AuthenticationResult(bool IsSuccess, CarbonioSession? Sessi
 
 public sealed record CarbonioSession(string Account, Uri SoapEndpoint, string AuthToken, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt);
 
+public sealed record ConnectionDiagnosticResult(bool IsSuccess, string Message, string? AccountName, string? ServerVersion);
+
 public sealed class MailFolder
 {
   public string Id { get; set; } = string.Empty;

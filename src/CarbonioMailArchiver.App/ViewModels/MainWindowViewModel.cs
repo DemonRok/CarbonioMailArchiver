@@ -14,6 +14,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly AppConfiguration _configuration;
   private readonly ICredentialStore _credentialStore;
   private readonly IOperationLogService _operationLogService;
+  private readonly IConnectionDiagnosticService _connectionDiagnosticService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
@@ -28,16 +29,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     AppConfiguration configuration,
     ICredentialStore credentialStore,
     IOperationLogService operationLogService,
+    IConnectionDiagnosticService connectionDiagnosticService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
     _credentialStore = credentialStore;
     _operationLogService = operationLogService;
+    _connectionDiagnosticService = connectionDiagnosticService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
     SaveCommand = new AsyncRelayCommand(SaveAsync);
-    ValidatePhaseACommand = new AsyncRelayCommand(ValidatePhaseAAsync);
+    TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     LogDirectory = operationLogService.LogDirectory;
   }
@@ -46,7 +49,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   public ICommand LoadCommand { get; }
   public ICommand SaveCommand { get; }
-  public ICommand ValidatePhaseACommand { get; }
+  public ICommand TestConnectionCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public string LogDirectory { get; }
@@ -132,7 +135,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     await RefreshLogsAsync();
   }
 
-  private async Task ValidatePhaseAAsync()
+  private async Task TestConnectionAsync()
   {
     var settings = ToSettings();
     var issues = new List<string>();
@@ -163,8 +166,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    _logger.LogInformation("Validazione Fase A completata per {Account}. Auth SOAP reale non ancora implementata.", settings.Email);
-    StatusMessage = "Validazione Fase A completata. Auth SOAP reale prevista in Fase B.";
+    var password = Password;
+    if (string.IsNullOrEmpty(password) && settings.RememberCredentials)
+    {
+      password = await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty;
+    }
+
+    StatusMessage = "Test connessione in corso...";
+    var result = await _connectionDiagnosticService.TestConnectionAsync(settings, password, CancellationToken.None);
+    StatusMessage = result.IsSuccess
+      ? $"{result.Message} Account: {result.AccountName}. Versione: {result.ServerVersion ?? "non rilevata"}."
+      : result.Message;
     await RefreshLogsAsync();
   }
 
