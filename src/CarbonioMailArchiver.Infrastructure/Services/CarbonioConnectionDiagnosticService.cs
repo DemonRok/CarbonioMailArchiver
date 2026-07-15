@@ -1,5 +1,5 @@
 using System.Net;
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using CarbonioMailArchiver.Core.Abstractions;
 using CarbonioMailArchiver.Core.Models;
@@ -9,6 +9,11 @@ namespace CarbonioMailArchiver.Infrastructure.Services;
 
 public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnectionDiagnosticService> logger) : IConnectionDiagnosticService
 {
+  private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+  {
+    PropertyNamingPolicy = null
+  };
+
   public async Task<ConnectionDiagnosticResult> TestConnectionAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken)
   {
     if (settings.AcceptUntrustedCertificates)
@@ -56,7 +61,8 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
 
     try
     {
-      var loginResponse = await httpClient.PostAsJsonAsync(
+      var loginResponse = await PostJsonAsync(
+        httpClient,
         "/zx/auth/v2/login",
         new
         {
@@ -158,7 +164,7 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
       }
     };
 
-    return httpClient.PostAsJsonAsync(endpoint, payload, cancellationToken);
+    return PostJsonAsync(httpClient, endpoint, payload, cancellationToken);
   }
 
   private static Task<HttpResponseMessage> PostGetInfoAsync(HttpClient httpClient, Uri soapUri, string account, CancellationToken cancellationToken)
@@ -192,7 +198,19 @@ public sealed class CarbonioConnectionDiagnosticService(ILogger<CarbonioConnecti
       }
     };
 
-    return httpClient.PostAsJsonAsync(endpoint, payload, cancellationToken);
+    return PostJsonAsync(httpClient, endpoint, payload, cancellationToken);
+  }
+
+  private static Task<HttpResponseMessage> PostJsonAsync(HttpClient httpClient, string requestUri, object payload, CancellationToken cancellationToken)
+  {
+    return PostJsonAsync(httpClient, new Uri(requestUri, UriKind.RelativeOrAbsolute), payload, cancellationToken);
+  }
+
+  private static async Task<HttpResponseMessage> PostJsonAsync(HttpClient httpClient, Uri requestUri, object payload, CancellationToken cancellationToken)
+  {
+    var json = JsonSerializer.Serialize(payload, JsonSerializerOptions);
+    using var content = new StringContent(json, Encoding.UTF8, "application/json");
+    return await httpClient.PostAsync(requestUri, content, cancellationToken);
   }
 
   private static string? TryReadStringProperty(string json, string propertyName)
