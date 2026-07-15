@@ -27,7 +27,7 @@ public sealed class MailFolder
 
 public sealed record MailMessageSummary(string Id, DateTimeOffset? Date, string From, string Subject, long? Size, string FolderId);
 
-public sealed record MailSearchRequest(DateOnly BeforeDate, int Limit, string SourceFolderQuery = "in:inbox");
+public sealed record MailSearchRequest(DateOnly BeforeDate, int Limit, string SourceFolderQuery = "in:inbox", int Offset = 0);
 
 public sealed record MailSearchResult(IReadOnlyList<MailMessageSummary> Messages, int? TotalCount, bool HasMore);
 

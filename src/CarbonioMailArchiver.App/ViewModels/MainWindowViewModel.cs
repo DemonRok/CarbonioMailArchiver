@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -25,13 +26,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _email = string.Empty;
   private string _password = string.Empty;
   private string _recentLogText = string.Empty;
-  private string _searchBeforeDate = DateTime.Today.ToString("yyyy-MM-dd");
+  private string _searchBeforeDate = DateTime.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
   private FolderSelectionViewModel? _selectedSourceFolder;
   private FolderSelectionViewModel? _selectedDestinationFolder;
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
+  private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
+  private int _batchSize = 50;
+  private int _moveProgressPercentage;
+  private string _moveProgressText = "Nessuno spostamento in corso.";
+  private CancellationTokenSource? _moveCancellationTokenSource;
+  private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
+  private readonly AsyncRelayCommand _cancelMoveCommand;
 
   public MainWindowViewModel(
     AppConfiguration configuration,
@@ -59,6 +67,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
     SimulateMoveCommand = new AsyncRelayCommand(SimulateMoveAsync);
     MovePreviewCommand = new AsyncRelayCommand(MovePreviewAsync);
+    _moveAllSearchResultsCommand = new AsyncRelayCommand(MoveAllSearchResultsAsync, () => !IsMoveInProgress);
+    _cancelMoveCommand = new AsyncRelayCommand(CancelMoveAsync, () => IsMoveInProgress);
+    MoveAllSearchResultsCommand = _moveAllSearchResultsCommand;
+    CancelMoveCommand = _cancelMoveCommand;
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -74,6 +86,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand TestSearchCommand { get; }
   public ICommand SimulateMoveCommand { get; }
   public ICommand MovePreviewCommand { get; }
+  public ICommand MoveAllSearchResultsCommand { get; }
+  public ICommand CancelMoveCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -146,6 +160,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _timeoutSeconds;
     set => SetField(ref _timeoutSeconds, value);
+  }
+
+  public int BatchSize
+  {
+    get => _batchSize;
+    set => SetField(ref _batchSize, value);
+  }
+
+  public bool IsMoveInProgress
+  {
+    get => _isMoveInProgress;
+    private set
+    {
+      SetField(ref _isMoveInProgress, value);
+      _moveAllSearchResultsCommand.RaiseCanExecuteChanged();
+      _cancelMoveCommand.RaiseCanExecuteChanged();
+    }
+  }
+
+  public int MoveProgressPercentage
+  {
+    get => _moveProgressPercentage;
+    private set => SetField(ref _moveProgressPercentage, value);
+  }
+
+  public string MoveProgressText
+  {
+    get => _moveProgressText;
+    private set => SetField(ref _moveProgressText, value);
   }
 
   public string StatusMessage
@@ -253,9 +296,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    if (!DateOnly.TryParse(SearchBeforeDate, out var beforeDate))
+    if (!TryParseSearchBeforeDate(out var beforeDate))
     {
-      StatusMessage = "Data ricerca non valida. Usa formato yyyy-MM-dd.";
+      StatusMessage = "Data ricerca non valida. Usa formato gg/MM/aaaa.";
       return;
     }
 
@@ -351,6 +394,188 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     await RefreshLogsAsync();
   }
 
+  private async Task MoveAllSearchResultsAsync()
+  {
+    if (IsMoveInProgress)
+    {
+      return;
+    }
+
+    var validationError = ValidateMoveSelection();
+    if (validationError is not null)
+    {
+      StatusMessage = validationError;
+      return;
+    }
+
+    if (!TryParseSearchBeforeDate(out var beforeDate))
+    {
+      StatusMessage = "Data ricerca non valida. Usa formato gg/MM/aaaa.";
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    var sourceFolder = SelectedSourceFolder!;
+    var destinationFolder = SelectedDestinationFolder!;
+    var batchSize = Math.Clamp(BatchSize, 1, 50);
+    var password = await GetPasswordAsync(settings);
+    var sourceFolderQuery = $"inid:{sourceFolder.Id}";
+    using var moveCancellation = new CancellationTokenSource();
+    _moveCancellationTokenSource = moveCancellation;
+    IsMoveInProgress = true;
+    MoveProgressPercentage = 0;
+    MoveProgressText = "Conteggio effettivo dei messaggi da spostare...";
+
+    StatusMessage = MoveProgressText;
+    (bool IsSuccess, string Message, IReadOnlyList<string> MessageIds) scanResult;
+    try
+    {
+      scanResult = await ScanMessageIdsAsync(settings, password, beforeDate, sourceFolderQuery, batchSize, moveCancellation.Token);
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = "Conteggio annullato dall'utente.";
+      MoveProgressText = "Conteggio annullato.";
+      await RefreshLogsAsync();
+      ResetMoveProgress();
+      return;
+    }
+
+    if (!scanResult.IsSuccess)
+    {
+      StatusMessage = scanResult.Message;
+      await RefreshLogsAsync();
+      ResetMoveProgress();
+      return;
+    }
+
+    if (scanResult.MessageIds.Count == 0)
+    {
+      StatusMessage = "Nessun messaggio trovato da spostare.";
+      PreviewMessages.Clear();
+      await RefreshLogsAsync();
+      ResetMoveProgress();
+      return;
+    }
+
+    var expectedTotal = scanResult.MessageIds.Count;
+    MoveProgressText = $"Pronto a spostare {expectedTotal} messaggi.";
+    var totalDescription = expectedTotal.ToString(CultureInfo.InvariantCulture);
+    var confirmation = MessageBox.Show(
+      $"Spostare realmente {totalDescription} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?\n\nData limite: prima del {beforeDate:dd/MM/yyyy}\nBatch: {batchSize} messaggi per volta",
+      "Conferma spostamento batch",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Warning,
+      MessageBoxResult.No);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      StatusMessage = "Spostamento batch annullato.";
+      await RefreshLogsAsync();
+      ResetMoveProgress();
+      return;
+    }
+
+    try
+    {
+      var movedCount = 0;
+      var batchNumber = 0;
+
+      foreach (var messageIdBatch in scanResult.MessageIds.Chunk(batchSize))
+      {
+        moveCancellation.Token.ThrowIfCancellationRequested();
+        batchNumber++;
+        UpdateMoveProgress(movedCount, expectedTotal, $"Spostamento batch {batchNumber} in corso...");
+        StatusMessage = $"{MoveProgressText} Spostati finora: {movedCount}.";
+        var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
+        if (!moveResult.IsSuccess)
+        {
+          StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
+          await RefreshLogsAsync();
+          return;
+        }
+
+        movedCount += moveResult.MovedCount;
+        UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} completato");
+        _logger.LogInformation(
+          "Spostamento batch {BatchNumber} completato. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
+          batchNumber,
+          moveResult.MovedCount,
+          movedCount);
+      }
+
+      PreviewMessages.Clear();
+      UpdateMoveProgress(movedCount, movedCount, "Spostamento completato");
+      StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.";
+      await RefreshLogsAsync();
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = "Spostamento annullato dall'utente. L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
+      MoveProgressText = "Spostamento annullato.";
+      await RefreshLogsAsync();
+    }
+    finally
+    {
+      IsMoveInProgress = false;
+      _moveCancellationTokenSource = null;
+    }
+  }
+
+  private Task CancelMoveAsync()
+  {
+    _moveCancellationTokenSource?.Cancel();
+    StatusMessage = "Annullamento richiesto. Attendo il completamento del batch corrente...";
+    MoveProgressText = "Annullamento richiesto...";
+    return Task.CompletedTask;
+  }
+
+  private async Task<(bool IsSuccess, string Message, IReadOnlyList<string> MessageIds)> ScanMessageIdsAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    DateOnly beforeDate,
+    string sourceFolderQuery,
+    int batchSize,
+    CancellationToken cancellationToken)
+  {
+    var messageIds = new List<string>();
+    var knownIds = new HashSet<string>(StringComparer.Ordinal);
+    var offset = 0;
+
+    while (true)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      MoveProgressText = $"Conteggio effettivo in corso: {messageIds.Count} messaggi trovati...";
+      StatusMessage = MoveProgressText;
+
+      var request = new MailSearchRequest(beforeDate, batchSize, sourceFolderQuery, offset);
+      var page = await _searchDiagnosticService.SearchInboxBeforeAsync(settings, password, request, cancellationToken);
+      if (!page.IsSuccess)
+      {
+        return (false, page.Message, messageIds);
+      }
+
+      var newIds = page.Messages
+        .Select(message => message.Id)
+        .Where(id => !string.IsNullOrWhiteSpace(id) && knownIds.Add(id))
+        .ToArray();
+      messageIds.AddRange(newIds);
+
+      if (!page.HasMore || page.Messages.Count < batchSize || newIds.Length == 0)
+      {
+        return (true, $"Conteggio completato. Messaggi trovati: {messageIds.Count}.", messageIds);
+      }
+
+      offset += batchSize;
+    }
+  }
+
   private async Task RefreshLogsAsync()
   {
     RecentLogLines.Clear();
@@ -435,6 +660,38 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return issues.Count == 0 ? null : string.Join(" ", issues);
   }
 
+  private bool TryParseSearchBeforeDate(out DateOnly beforeDate)
+  {
+    return DateOnly.TryParseExact(
+      SearchBeforeDate.Trim(),
+      "dd/MM/yyyy",
+      CultureInfo.InvariantCulture,
+      DateTimeStyles.None,
+      out beforeDate);
+  }
+
+  private void UpdateMoveProgress(int movedCount, int? expectedTotal, string text)
+  {
+    if (expectedTotal is null || expectedTotal <= 0)
+    {
+      MoveProgressPercentage = 0;
+      MoveProgressText = $"{text}: {movedCount} messaggi spostati.";
+      return;
+    }
+
+    var safeTotal = Math.Max(expectedTotal.Value, 1);
+    MoveProgressPercentage = Math.Clamp((int)Math.Round(movedCount * 100d / safeTotal), 0, 100);
+    MoveProgressText = $"{text}: {movedCount}/{expectedTotal.Value} messaggi ({MoveProgressPercentage}%).";
+  }
+
+  private void ResetMoveProgress()
+  {
+    IsMoveInProgress = false;
+    _moveCancellationTokenSource = null;
+    MoveProgressPercentage = 0;
+    MoveProgressText = "Nessuno spostamento in corso.";
+  }
+
   private string? ValidateMovePreview()
   {
     if (PreviewMessages.Count == 0)
@@ -442,6 +699,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return "Nessun messaggio in preview. Esegui prima Test ricerca.";
     }
 
+    return ValidateMoveSelection();
+  }
+
+  private string? ValidateMoveSelection()
+  {
     if (SelectedSourceFolder is null)
     {
       return "Seleziona una cartella sorgente.";

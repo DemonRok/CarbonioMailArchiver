@@ -36,6 +36,8 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -57,11 +59,14 @@
                     <CheckBox Grid.Row="5" Grid.Column="1" Content="Ricorda password con DPAPI per l'utente Windows corrente" IsChecked="{Binding RememberCredentials}" Margin="0,0,0,10" />
                     <CheckBox Grid.Row="6" Grid.Column="1" Content="Abilita logging diagnostico SOAP (senza password)" IsChecked="{Binding DiagnosticSoapLoggingEnabled}" Margin="0,0,0,10" />
 
-                    <TextBlock Grid.Row="7" Text="Cerca prima del" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <TextBlock Grid.Row="7" Text="Cerca prima del (gg/MM/aaaa)" VerticalAlignment="Center" Margin="0,0,12,12" />
                     <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
 
-                    <TextBlock Grid.Row="8" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
-                    <ComboBox Grid.Row="8" Grid.Column="1"
+                    <TextBlock Grid.Row="8" Text="Dimensione batch" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+
+                    <TextBlock Grid.Row="9" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <ComboBox Grid.Row="9" Grid.Column="1"
                               ItemsSource="{Binding AvailableFolders}"
                               SelectedItem="{Binding SelectedSourceFolder}"
                               DisplayMemberPath="DisplayName"
@@ -69,8 +74,8 @@
                               HorizontalAlignment="Left"
                               Margin="0,0,0,12" />
 
-                    <TextBlock Grid.Row="9" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
-                    <ComboBox Grid.Row="9" Grid.Column="1"
+                    <TextBlock Grid.Row="10" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <ComboBox Grid.Row="10" Grid.Column="1"
                               ItemsSource="{Binding AvailableFolders}"
                               SelectedItem="{Binding SelectedDestinationFolder}"
                               DisplayMemberPath="DisplayName"
@@ -78,16 +83,44 @@
                               HorizontalAlignment="Left"
                               Margin="0,0,0,12" />
 
-                    <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
+                    <StackPanel Grid.Row="11" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
                         <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
                         <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,0" />
                         <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,0" />
                         <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,0" />
-                        <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" />
+                        <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" Margin="0,0,8,0" />
+                        <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="110" />
                     </StackPanel>
 
-                    <DataGrid Grid.Row="11"
+                    <Grid Grid.Row="12" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ProgressBar Grid.ColumnSpan="2"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     Height="18"
+                                     Value="{Binding MoveProgressPercentage, Mode=OneWay}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{Binding MoveProgressText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="#555"
+                                   Margin="0,4,12,0" />
+                        <Button Grid.Row="1"
+                                Grid.Column="1"
+                                Content="Annulla"
+                                Command="{Binding CancelMoveCommand}"
+                                Width="96"
+                                Margin="0,4,0,0" />
+                    </Grid>
+
+                    <DataGrid Grid.Row="13"
                               Grid.ColumnSpan="2"
                               ItemsSource="{Binding PreviewMessages}"
                               AutoGenerateColumns="False"

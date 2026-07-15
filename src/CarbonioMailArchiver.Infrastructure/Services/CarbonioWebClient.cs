@@ -102,7 +102,7 @@ internal sealed class CarbonioWebClient : IDisposable
     return PostSoapJsonAsync("GetFolderRequest", payload, cancellationToken);
   }
 
-  public Task<HttpResponseMessage> PostSearchAsync(string query, int limit, CancellationToken cancellationToken)
+  public Task<HttpResponseMessage> PostSearchAsync(string query, int limit, int offset, CancellationToken cancellationToken)
   {
     var request = new
     {
@@ -110,7 +110,7 @@ internal sealed class CarbonioWebClient : IDisposable
       query,
       types = "message",
       limit,
-      offset = 0,
+      offset,
       sortBy = "dateDesc",
       fetch = 1
     };
