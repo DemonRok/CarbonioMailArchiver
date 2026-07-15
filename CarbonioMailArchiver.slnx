@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CarbonioMailArchiver.App/CarbonioMailArchiver.App.csproj" />
+    <Project Path="src/CarbonioMailArchiver.Core/CarbonioMailArchiver.Core.csproj" />
+    <Project Path="src/CarbonioMailArchiver.Infrastructure/CarbonioMailArchiver.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CarbonioMailArchiver.Tests/CarbonioMailArchiver.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,49 @@
+using System.Xml.Linq;
+using CarbonioMailArchiver.Core.Models;
+
+namespace CarbonioMailArchiver.Core.Abstractions;
+
+public interface IAuthenticationService
+{
+  Task<AuthenticationResult> AuthenticateAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken);
+  Task LogoutAsync(CarbonioSession session, CancellationToken cancellationToken);
+}
+
+public interface ICarbonioSoapClient
+{
+  Task<XDocument> SendAsync(CarbonioConnectionSettings settings, XDocument envelope, CancellationToken cancellationToken);
+}
+
+public interface IMailSearchService
+{
+  Task<MailSearchResult> SearchAsync(CarbonioSession session, MailSearchRequest request, CancellationToken cancellationToken);
+}
+
+public interface IMailMoveService
+{
+  Task<MailMoveResult> MoveAsync(CarbonioSession session, MailMoveRequest request, CancellationToken cancellationToken);
+}
+
+public interface IFolderService
+{
+  Task<IReadOnlyList<MailFolder>> GetFoldersAsync(CarbonioSession session, CancellationToken cancellationToken);
+  Task<MailFolder> CreateInboxChildFolderAsync(CarbonioSession session, string folderName, CancellationToken cancellationToken);
+}
+
+public interface ICredentialStore
+{
+  Task SavePasswordAsync(string account, string password, CancellationToken cancellationToken);
+  Task<string?> ReadPasswordAsync(string account, CancellationToken cancellationToken);
+  Task DeletePasswordAsync(string account, CancellationToken cancellationToken);
+}
+
+public interface IOperationLogService
+{
+  Task<IReadOnlyList<string>> ReadRecentLinesAsync(int maxLines, CancellationToken cancellationToken);
+  string LogDirectory { get; }
+}
+
+public interface ICsvExportService
+{
+  Task ExportPreviewAsync(string path, IEnumerable<MailMessageSummary> messages, CancellationToken cancellationToken);
+}
