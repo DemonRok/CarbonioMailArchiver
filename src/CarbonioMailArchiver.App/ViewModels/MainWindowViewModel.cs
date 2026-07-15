@@ -62,6 +62,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ObservableCollection<string> RecentLogLines { get; } = [];
+  public ObservableCollection<MailMessageSummary> PreviewMessages { get; } = [];
   public string LogDirectory { get; }
 
   public string BaseUrl
@@ -195,6 +196,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var password = await GetPasswordAsync(settings);
     var request = new MailSearchRequest(beforeDate, 10);
+    PreviewMessages.Clear();
     StatusMessage = "Ricerca diagnostica in corso...";
     var result = await _searchDiagnosticService.SearchInboxBeforeAsync(settings, password, request, CancellationToken.None);
     if (!result.IsSuccess)
@@ -202,6 +204,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = result.Message;
       await RefreshLogsAsync();
       return;
+    }
+
+    foreach (var message in result.Messages)
+    {
+      PreviewMessages.Add(message);
     }
 
     StatusMessage = $"{result.Message} Totale dichiarato: {result.TotalCount?.ToString() ?? "non rilevato"}. Altri risultati: {(result.HasMore ? "si" : "no")}.";

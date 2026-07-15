@@ -34,6 +34,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Base URL" VerticalAlignment="Center" Margin="0,0,12,12" />
@@ -57,12 +58,32 @@
                     <TextBlock Grid.Row="7" Text="Cerca prima del" VerticalAlignment="Center" Margin="0,0,12,12" />
                     <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
 
-                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,0">
+                    <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
                         <Button Content="Carica" Command="{Binding LoadCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
                         <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
                         <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" />
                     </StackPanel>
+
+                    <DataGrid Grid.Row="9"
+                              Grid.ColumnSpan="2"
+                              ItemsSource="{Binding PreviewMessages}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              SelectionMode="Extended"
+                              SelectionUnit="FullRow"
+                              Margin="0,10,0,0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Data" Binding="{Binding Date}" Width="150" />
+                            <DataGridTextColumn Header="Mittente" Binding="{Binding From}" Width="220" />
+                            <DataGridTextColumn Header="Oggetto" Binding="{Binding Subject}" Width="*" />
+                            <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="110" />
+                            <DataGridTextColumn Header="Cartella" Binding="{Binding FolderId}" Width="80" />
+                            <DataGridTextColumn Header="Dim." Binding="{Binding Size}" Width="80" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
             </TabItem>
 
