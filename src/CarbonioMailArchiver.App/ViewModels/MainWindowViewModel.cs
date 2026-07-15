@@ -35,8 +35,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _batchSize = 50;
+  private int _maxMessagesToMove;
   private int _moveProgressPercentage;
+  private bool _isMoveProgressIndeterminate;
   private string _moveProgressText = "Nessuno spostamento in corso.";
+  private string _moveProgressPercentText = string.Empty;
+  private string _moveBatchText = string.Empty;
+  private string _moveDetailText = "Nessuno spostamento in corso.";
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
@@ -168,6 +173,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _batchSize, value);
   }
 
+  public int MaxMessagesToMove
+  {
+    get => _maxMessagesToMove;
+    set => SetField(ref _maxMessagesToMove, value);
+  }
+
   public bool IsMoveInProgress
   {
     get => _isMoveInProgress;
@@ -185,10 +196,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private set => SetField(ref _moveProgressPercentage, value);
   }
 
+  public bool IsMoveProgressIndeterminate
+  {
+    get => _isMoveProgressIndeterminate;
+    private set => SetField(ref _isMoveProgressIndeterminate, value);
+  }
+
   public string MoveProgressText
   {
     get => _moveProgressText;
     private set => SetField(ref _moveProgressText, value);
+  }
+
+  public string MoveProgressPercentText
+  {
+    get => _moveProgressPercentText;
+    private set => SetField(ref _moveProgressPercentText, value);
+  }
+
+  public string MoveBatchText
+  {
+    get => _moveBatchText;
+    private set => SetField(ref _moveBatchText, value);
+  }
+
+  public string MoveDetailText
+  {
+    get => _moveDetailText;
+    private set => SetField(ref _moveDetailText, value);
   }
 
   public string StatusMessage
@@ -425,24 +460,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var sourceFolder = SelectedSourceFolder!;
     var destinationFolder = SelectedDestinationFolder!;
     var batchSize = Math.Clamp(BatchSize, 1, 50);
+    var maxMessagesToMove = Math.Max(MaxMessagesToMove, 0);
     var password = await GetPasswordAsync(settings);
     var sourceFolderQuery = $"inid:{sourceFolder.Id}";
     using var moveCancellation = new CancellationTokenSource();
     _moveCancellationTokenSource = moveCancellation;
     IsMoveInProgress = true;
     MoveProgressPercentage = 0;
+    IsMoveProgressIndeterminate = true;
     MoveProgressText = "Conteggio effettivo dei messaggi da spostare...";
+    MoveProgressPercentText = string.Empty;
+    MoveBatchText = "Conteggio";
+    MoveDetailText = MoveProgressText;
 
     StatusMessage = MoveProgressText;
     (bool IsSuccess, string Message, IReadOnlyList<string> MessageIds) scanResult;
     try
     {
-      scanResult = await ScanMessageIdsAsync(settings, password, beforeDate, sourceFolderQuery, batchSize, moveCancellation.Token);
+      scanResult = await ScanMessageIdsAsync(settings, password, beforeDate, sourceFolderQuery, batchSize, maxMessagesToMove, moveCancellation.Token);
     }
     catch (OperationCanceledException)
     {
       StatusMessage = "Conteggio annullato dall'utente.";
       MoveProgressText = "Conteggio annullato.";
+      MoveBatchText = "Conteggio annullato";
+      MoveDetailText = MoveProgressText;
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -466,10 +508,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var expectedTotal = scanResult.MessageIds.Count;
+    MoveProgressPercentage = 0;
+    IsMoveProgressIndeterminate = false;
+    MoveProgressPercentText = "0%";
+    MoveBatchText = "Pronto";
     MoveProgressText = $"Pronto a spostare {expectedTotal} messaggi.";
+    MoveDetailText = MoveProgressText;
     var totalDescription = expectedTotal.ToString(CultureInfo.InvariantCulture);
+    var limitDescription = maxMessagesToMove == 0
+      ? "tutti i messaggi trovati"
+      : $"massimo {maxMessagesToMove.ToString(CultureInfo.InvariantCulture)} messaggi";
     var confirmation = MessageBox.Show(
-      $"Spostare realmente {totalDescription} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?\n\nData limite: prima del {beforeDate:dd/MM/yyyy}\nBatch: {batchSize} messaggi per volta",
+      $"Spostare realmente {totalDescription} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?\n\nData limite: prima del {beforeDate:dd/MM/yyyy}\nLimite richiesto: {limitDescription}\nBatch: {batchSize} messaggi per volta",
       "Conferma spostamento batch",
       MessageBoxButton.YesNo,
       MessageBoxImage.Warning,
@@ -491,8 +541,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         moveCancellation.Token.ThrowIfCancellationRequested();
         batchNumber++;
-        UpdateMoveProgress(movedCount, expectedTotal, $"Spostamento batch {batchNumber} in corso...");
-        StatusMessage = $"{MoveProgressText} Spostati finora: {movedCount}.";
+        UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"Spostati finora: {movedCount}/{expectedTotal} messaggi.");
+        StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
         var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
         if (!moveResult.IsSuccess)
         {
@@ -501,8 +551,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
           return;
         }
 
+        var previousMovedCount = movedCount;
         movedCount += moveResult.MovedCount;
-        UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} completato");
+        await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} completato", moveCancellation.Token);
         _logger.LogInformation(
           "Spostamento batch {BatchNumber} completato. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
           batchNumber,
@@ -511,7 +562,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       PreviewMessages.Clear();
-      UpdateMoveProgress(movedCount, movedCount, "Spostamento completato");
+      UpdateMoveProgress(movedCount, movedCount, "Spostamento completato", $"{movedCount} messaggi spostati.");
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.";
       await RefreshLogsAsync();
     }
@@ -519,6 +570,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = "Spostamento annullato dall'utente. L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
       MoveProgressText = "Spostamento annullato.";
+      MoveBatchText = "Spostamento annullato";
+      MoveDetailText = "L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
       await RefreshLogsAsync();
     }
     finally
@@ -533,6 +586,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _moveCancellationTokenSource?.Cancel();
     StatusMessage = "Annullamento richiesto. Attendo il completamento del batch corrente...";
     MoveProgressText = "Annullamento richiesto...";
+    MoveBatchText = "Annullamento richiesto";
+    MoveDetailText = "Attendo il completamento del batch corrente...";
+    IsMoveProgressIndeterminate = false;
     return Task.CompletedTask;
   }
 
@@ -542,6 +598,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DateOnly beforeDate,
     string sourceFolderQuery,
     int batchSize,
+    int maxMessagesToMove,
     CancellationToken cancellationToken)
   {
     var messageIds = new List<string>();
@@ -551,7 +608,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     while (true)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      MoveProgressText = $"Conteggio effettivo in corso: {messageIds.Count} messaggi trovati...";
+      MoveProgressText = maxMessagesToMove == 0
+        ? $"Conteggio effettivo in corso: {messageIds.Count} messaggi trovati..."
+        : $"Conteggio effettivo in corso: {messageIds.Count}/{maxMessagesToMove} messaggi selezionati...";
+      MoveBatchText = "Conteggio";
+      MoveDetailText = MoveProgressText;
       StatusMessage = MoveProgressText;
 
       var request = new MailSearchRequest(beforeDate, batchSize, sourceFolderQuery, offset);
@@ -561,11 +622,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return (false, page.Message, messageIds);
       }
 
+      var remainingLimit = maxMessagesToMove == 0 ? int.MaxValue : maxMessagesToMove - messageIds.Count;
       var newIds = page.Messages
         .Select(message => message.Id)
         .Where(id => !string.IsNullOrWhiteSpace(id) && knownIds.Add(id))
+        .Take(remainingLimit)
         .ToArray();
       messageIds.AddRange(newIds);
+
+      if (maxMessagesToMove > 0 && messageIds.Count >= maxMessagesToMove)
+      {
+        return (true, $"Conteggio completato. Messaggi selezionati: {messageIds.Count}.", messageIds);
+      }
 
       if (!page.HasMore || page.Messages.Count < batchSize || newIds.Length == 0)
       {
@@ -670,18 +738,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       out beforeDate);
   }
 
-  private void UpdateMoveProgress(int movedCount, int? expectedTotal, string text)
+  private void UpdateMoveProgress(int movedCount, int? expectedTotal, string batchText, string detailText)
   {
+    IsMoveProgressIndeterminate = false;
     if (expectedTotal is null || expectedTotal <= 0)
     {
       MoveProgressPercentage = 0;
-      MoveProgressText = $"{text}: {movedCount} messaggi spostati.";
+      MoveProgressPercentText = string.Empty;
+      MoveBatchText = batchText;
+      MoveDetailText = detailText;
+      MoveProgressText = $"{batchText}. {detailText}";
       return;
     }
 
     var safeTotal = Math.Max(expectedTotal.Value, 1);
     MoveProgressPercentage = Math.Clamp((int)Math.Round(movedCount * 100d / safeTotal), 0, 100);
-    MoveProgressText = $"{text}: {movedCount}/{expectedTotal.Value} messaggi ({MoveProgressPercentage}%).";
+    MoveProgressPercentText = $"{MoveProgressPercentage}%";
+    MoveBatchText = batchText;
+    MoveDetailText = detailText;
+    MoveProgressText = $"{batchText}. {detailText}";
+  }
+
+  private async Task AnimateMoveProgressAsync(int fromCount, int toCount, int expectedTotal, string text, CancellationToken cancellationToken)
+  {
+    var delta = toCount - fromCount;
+    if (delta <= 0)
+    {
+      UpdateMoveProgress(toCount, expectedTotal, text, $"{toCount}/{expectedTotal} messaggi spostati.");
+      return;
+    }
+
+    var delay = TimeSpan.FromMilliseconds(Math.Clamp(500 / delta, 8, 35));
+    for (var movedCount = fromCount + 1; movedCount <= toCount; movedCount++)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      UpdateMoveProgress(movedCount, expectedTotal, text, $"{movedCount}/{expectedTotal} messaggi spostati.");
+      await Task.Delay(delay, cancellationToken);
+    }
   }
 
   private void ResetMoveProgress()
@@ -689,7 +782,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IsMoveInProgress = false;
     _moveCancellationTokenSource = null;
     MoveProgressPercentage = 0;
+    IsMoveProgressIndeterminate = false;
     MoveProgressText = "Nessuno spostamento in corso.";
+    MoveProgressPercentText = string.Empty;
+    MoveBatchText = string.Empty;
+    MoveDetailText = MoveProgressText;
   }
 
   private string? ValidateMovePreview()
