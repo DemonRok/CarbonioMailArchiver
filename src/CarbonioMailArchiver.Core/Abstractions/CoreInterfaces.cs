@@ -29,6 +29,11 @@ public interface IFolderDiagnosticService
   Task<IReadOnlyDictionary<string, MailFolder>> GetFoldersByIdAsync(CarbonioConnectionSettings settings, string password, CancellationToken cancellationToken);
 }
 
+public interface IMoveDiagnosticService
+{
+  Task<MailMoveResult> MoveMessagesAsync(CarbonioConnectionSettings settings, string password, IReadOnlyList<string> messageIds, string destinationFolderId, CancellationToken cancellationToken);
+}
+
 public interface IMailSearchService
 {
   Task<MailSearchResult> SearchAsync(CarbonioSession session, MailSearchRequest request, CancellationToken cancellationToken);

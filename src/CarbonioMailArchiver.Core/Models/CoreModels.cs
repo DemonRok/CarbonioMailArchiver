@@ -33,7 +33,10 @@ public sealed record MailSearchResult(IReadOnlyList<MailMessageSummary> Messages
 
 public sealed record MailMoveRequest(IReadOnlyList<string> MessageIds, string DestinationFolderId);
 
-public sealed record MailMoveResult(int RequestedCount, int MovedCount, IReadOnlyList<string> FailedMessageIds, SoapFaultInfo? Fault);
+public sealed record MailMoveResult(int RequestedCount, int MovedCount, IReadOnlyList<string> FailedMessageIds, SoapFaultInfo? Fault)
+{
+  public bool IsSuccess => Fault is null && FailedMessageIds.Count == 0 && MovedCount == RequestedCount;
+}
 
 public enum ArchiveOperationMode
 {

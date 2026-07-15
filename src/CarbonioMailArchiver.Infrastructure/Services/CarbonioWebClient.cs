@@ -118,6 +118,22 @@ internal sealed class CarbonioWebClient : IDisposable
     return PostSoapJsonAsync("SearchRequest", payload, cancellationToken);
   }
 
+  public Task<HttpResponseMessage> PostMoveMessagesAsync(IReadOnlyList<string> messageIds, string destinationFolderId, CancellationToken cancellationToken)
+  {
+    var request = new
+    {
+      _jsns = "urn:zimbraMail",
+      action = new
+      {
+        id = string.Join(",", messageIds),
+        op = "move",
+        l = destinationFolderId
+      }
+    };
+    var payload = BuildSoapPayload("MsgActionRequest", request);
+    return PostSoapJsonAsync("MsgActionRequest", payload, cancellationToken);
+  }
+
   public void Dispose()
   {
     _httpClient.Dispose();

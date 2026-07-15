@@ -83,7 +83,8 @@
                         <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
                         <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,0" />
                         <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,0" />
-                        <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" />
+                        <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,0" />
+                        <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" />
                     </StackPanel>
 
                     <DataGrid Grid.Row="11"

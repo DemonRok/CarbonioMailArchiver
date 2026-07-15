@@ -18,6 +18,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly IConnectionDiagnosticService _connectionDiagnosticService;
   private readonly ISearchDiagnosticService _searchDiagnosticService;
   private readonly IFolderDiagnosticService _folderDiagnosticService;
+  private readonly IMoveDiagnosticService _moveDiagnosticService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
@@ -39,6 +40,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IConnectionDiagnosticService connectionDiagnosticService,
     ISearchDiagnosticService searchDiagnosticService,
     IFolderDiagnosticService folderDiagnosticService,
+    IMoveDiagnosticService moveDiagnosticService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
@@ -47,6 +49,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _connectionDiagnosticService = connectionDiagnosticService;
     _searchDiagnosticService = searchDiagnosticService;
     _folderDiagnosticService = folderDiagnosticService;
+    _moveDiagnosticService = moveDiagnosticService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
@@ -55,6 +58,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     LoadFoldersCommand = new AsyncRelayCommand(LoadFoldersAsync);
     TestSearchCommand = new AsyncRelayCommand(TestSearchAsync);
     SimulateMoveCommand = new AsyncRelayCommand(SimulateMoveAsync);
+    MovePreviewCommand = new AsyncRelayCommand(MovePreviewAsync);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -69,6 +73,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand LoadFoldersCommand { get; }
   public ICommand TestSearchCommand { get; }
   public ICommand SimulateMoveCommand { get; }
+  public ICommand MovePreviewCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -278,39 +283,71 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private async Task SimulateMoveAsync()
   {
-    if (PreviewMessages.Count == 0)
+    var validationError = ValidateMovePreview();
+    if (validationError is not null)
     {
-      StatusMessage = "Nessun messaggio in preview. Esegui prima Test ricerca.";
+      StatusMessage = validationError;
       return;
     }
 
-    if (SelectedSourceFolder is null)
-    {
-      StatusMessage = "Seleziona una cartella sorgente.";
-      return;
-    }
-
-    if (SelectedDestinationFolder is null)
-    {
-      StatusMessage = "Seleziona una cartella destinazione.";
-      return;
-    }
-
-    if (SelectedSourceFolder.Id == SelectedDestinationFolder.Id)
-    {
-      StatusMessage = "Sorgente e destinazione devono essere diverse.";
-      return;
-    }
-
+    var sourceFolder = SelectedSourceFolder!;
+    var destinationFolder = SelectedDestinationFolder!;
     _logger.LogInformation(
       "Simulazione spostamento: {Count} messaggi da {SourceFolder} ({SourceId}) a {DestinationFolder} ({DestinationId}).",
       PreviewMessages.Count,
-      SelectedSourceFolder.AbsolutePath,
-      SelectedSourceFolder.Id,
-      SelectedDestinationFolder.AbsolutePath,
-      SelectedDestinationFolder.Id);
+      sourceFolder.AbsolutePath,
+      sourceFolder.Id,
+      destinationFolder.AbsolutePath,
+      destinationFolder.Id);
 
-    StatusMessage = $"Simulazione: {PreviewMessages.Count} messaggi verrebbero spostati da {SelectedSourceFolder.AbsolutePath} a {SelectedDestinationFolder.AbsolutePath}. Nessuna modifica eseguita.";
+    StatusMessage = $"Simulazione: {PreviewMessages.Count} messaggi verrebbero spostati da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}. Nessuna modifica eseguita.";
+    await RefreshLogsAsync();
+  }
+
+  private async Task MovePreviewAsync()
+  {
+    var validationError = ValidateMovePreview();
+    if (validationError is not null)
+    {
+      StatusMessage = validationError;
+      return;
+    }
+
+    var sourceFolder = SelectedSourceFolder!;
+    var destinationFolder = SelectedDestinationFolder!;
+    var confirmation = MessageBox.Show(
+      $"Spostare realmente {PreviewMessages.Count} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?",
+      "Conferma spostamento",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Warning,
+      MessageBoxResult.No);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      StatusMessage = "Spostamento annullato.";
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    var password = await GetPasswordAsync(settings);
+    var messageIds = PreviewMessages.Select(message => message.Id).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToArray();
+    StatusMessage = "Spostamento reale in corso...";
+    var result = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIds, destinationFolder.Id, CancellationToken.None);
+    if (!result.IsSuccess)
+    {
+      StatusMessage = $"Spostamento fallito. Richiesti: {result.RequestedCount}, spostati: {result.MovedCount}. {result.Fault?.Reason}";
+      await RefreshLogsAsync();
+      return;
+    }
+
+    PreviewMessages.Clear();
+    StatusMessage = $"Spostamento completato. Messaggi spostati: {result.MovedCount}.";
     await RefreshLogsAsync();
   }
 
@@ -396,6 +433,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     return issues.Count == 0 ? null : string.Join(" ", issues);
+  }
+
+  private string? ValidateMovePreview()
+  {
+    if (PreviewMessages.Count == 0)
+    {
+      return "Nessun messaggio in preview. Esegui prima Test ricerca.";
+    }
+
+    if (SelectedSourceFolder is null)
+    {
+      return "Seleziona una cartella sorgente.";
+    }
+
+    if (SelectedDestinationFolder is null)
+    {
+      return "Seleziona una cartella destinazione.";
+    }
+
+    if (SelectedSourceFolder.Id == SelectedDestinationFolder.Id)
+    {
+      return "Sorgente e destinazione devono essere diverse.";
+    }
+
+    return null;
   }
 
   private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
