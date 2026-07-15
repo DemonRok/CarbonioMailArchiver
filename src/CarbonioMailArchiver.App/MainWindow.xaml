@@ -34,7 +34,6 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Base URL" VerticalAlignment="Center" Margin="0,0,12,12" />
