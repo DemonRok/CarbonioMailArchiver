@@ -9,10 +9,10 @@ public sealed class MailQueryBuilderTests
   public void BuildInboxBeforeQuery_UsesExclusiveDateFormat()
   {
     var builder = new MailQueryBuilder();
-    var request = new MailSearchRequest(new DateOnly(2024, 1, 1), 200);
+    var request = new MailSearchRequest(new DateOnly(2024, 1, 31), 200);
 
     var query = builder.BuildInboxBeforeQuery(request);
 
-    Assert.Equal("in:inbox before:2024/01/01", query);
+    Assert.Equal("in:inbox before:31/01/2024", query);
   }
 }

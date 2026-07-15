@@ -43,7 +43,7 @@ Chiamate SOAP/API verificate o da verificare in Fase B:
 
 - `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
 - `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- `SearchRequest` diagnostica con query equivalente a `in:inbox before:yyyy/MM/dd`;
+- `SearchRequest` diagnostica con query equivalente a `in:inbox before:dd/MM/yyyy`;
 - `FolderActionRequest` o chiamata equivalente per creare la cartella archivio sotto Inbox;
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
 - `GetFolderRequest` per leggere ID, permessi e struttura cartelle.

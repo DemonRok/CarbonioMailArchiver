@@ -9,7 +9,7 @@ public sealed class MailQueryBuilder
   {
     ArgumentOutOfRangeException.ThrowIfLessThan(request.Limit, 1);
 
-    var date = request.BeforeDate.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+    var date = request.BeforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
     return $"{request.SourceFolderQuery} before:{date}";
   }
 }
