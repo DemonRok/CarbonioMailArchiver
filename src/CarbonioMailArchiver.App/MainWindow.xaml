@@ -61,25 +61,13 @@
                             <TextBlock Grid.Row="3" Text="Password" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <PasswordBox Grid.Row="3" Grid.Column="1" x:Name="PasswordInput" PasswordChanged="PasswordInput_OnPasswordChanged" Margin="0,0,0,12" />
 
-                            <TextBlock Grid.Row="4" Text="Timeout SOAP" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                            <CheckBox Grid.Row="4" Grid.Column="1" Content="Ricorda password con DPAPI per l'utente Windows corrente" IsChecked="{Binding RememberCredentials}" Margin="0,0,0,10" />
 
-                            <CheckBox Grid.Row="5" Grid.Column="1" Content="Ricorda password con DPAPI per l'utente Windows corrente" IsChecked="{Binding RememberCredentials}" Margin="0,0,0,10" />
+                            <TextBlock Grid.Row="5" Text="Cerca prima del (gg/MM/aaaa)" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
 
-                            <TextBlock Grid.Row="6" Text="Cerca prima del (gg/MM/aaaa)" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
-
-                            <TextBlock Grid.Row="7" Text="Email visibili in preview" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding PreviewMessageLimit, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
-
-                            <TextBlock Grid.Row="8" Text="Dimensione batch" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
-
-                            <TextBlock Grid.Row="9" Text="Limite email (0 = tutte)" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding MaxMessagesToMove, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
-
-                            <TextBlock Grid.Row="10" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <ComboBox Grid.Row="10" Grid.Column="1"
+                            <TextBlock Grid.Row="6" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <ComboBox Grid.Row="6" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
                                       SelectedItem="{Binding SelectedSourceFolder}"
                                       DisplayMemberPath="DisplayName"
@@ -87,8 +75,8 @@
                                       HorizontalAlignment="Left"
                                       Margin="0,0,0,12" />
 
-                            <TextBlock Grid.Row="11" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <ComboBox Grid.Row="11" Grid.Column="1"
+                            <TextBlock Grid.Row="7" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <ComboBox Grid.Row="7" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
                                       SelectedItem="{Binding SelectedDestinationFolder}"
                                       DisplayMemberPath="DisplayName"
@@ -96,7 +84,7 @@
                                       HorizontalAlignment="Left"
                                       Margin="0,0,0,12" />
 
-                            <WrapPanel Grid.Row="12" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
+                            <WrapPanel Grid.Row="8" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
                                 <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,8" />
                                 <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,8" />
                                 <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,8" />
@@ -108,7 +96,7 @@
                         </Grid>
                     </ScrollViewer>
 
-                    <Grid Grid.Row="1" Margin="0,8,0,8">
+                    <Grid Grid.Row="1" Margin="0,18,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -172,6 +160,110 @@
                 </Grid>
             </TabItem>
 
+            <TabItem Header="Configurazione">
+                <Grid Margin="0,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Timeout SOAP" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <TextBox Grid.Column="1" Text="{Binding TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+
+                    <TextBlock Grid.Row="1" Text="Parametri ricerca e move" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="Preview (1-100)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Grid Grid.Column="1" Margin="0,0,20,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="54" />
+                                <ColumnDefinition Width="18" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding PreviewMessageLimit, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <RepeatButton Content="▲" Command="{Binding IncreasePreviewMessageLimitCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                                <RepeatButton Grid.Row="1" Content="▼" Command="{Binding DecreasePreviewMessageLimitCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                            </Grid>
+                        </Grid>
+
+                        <TextBlock Grid.Column="2" Text="Batch move (10-100)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Grid Grid.Column="3" Margin="0,0,20,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="54" />
+                                <ColumnDefinition Width="18" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <RepeatButton Content="▲" Command="{Binding IncreaseBatchSizeCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                                <RepeatButton Grid.Row="1" Content="▼" Command="{Binding DecreaseBatchSizeCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                            </Grid>
+                        </Grid>
+
+                        <TextBlock Grid.Column="4" Text="Da spostare (0=tutte)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Grid Grid.Column="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="66" />
+                                <ColumnDefinition Width="18" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding MaxMessagesToMove, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <RepeatButton Content="▲" Command="{Binding IncreaseMaxMessagesToMoveCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                                <RepeatButton Grid.Row="1" Content="▼" Command="{Binding DecreaseMaxMessagesToMoveCommand}" Delay="350" Interval="70" FontSize="8" Padding="0" />
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <CheckBox Grid.Row="2"
+                              Grid.Column="1"
+                              Content="Carica cartelle all'avvio se la password e' disponibile"
+                              IsChecked="{Binding AutoLoadFoldersOnStartup}"
+                              Margin="0,0,0,10" />
+                    <CheckBox Grid.Row="3"
+                              Grid.Column="1"
+                              Content="Logging diagnostico API/SOAP (senza password)"
+                              IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
+                              Margin="0,0,0,10" />
+                    <TextBlock Grid.Row="4"
+                               Grid.ColumnSpan="2"
+                               TextWrapping="Wrap"
+                               Foreground="#555"
+                               Margin="0,12,0,0"
+                               Text="Preview controlla quante email vengono mostrate dal Test ricerca, senza spostarle. Batch move controlla quante email vengono inviate al server per ogni richiesta di spostamento. Da spostare limita il numero totale di email da muovere: 0 significa tutte quelle trovate. Carica cartelle all'avvio usa la password salvata con DPAPI, se disponibile. Il logging diagnostico registra dettagli tecnici API/SOAP senza salvare password." />
+                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
+                        <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" Margin="0,0,10,0" />
+                        <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
             <TabItem Header="Log">
                 <Grid Margin="0,18,0,0">
                     <Grid.RowDefinitions>
@@ -200,7 +292,7 @@
             <TabItem Header="Info">
                 <Grid Margin="0,18,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="150" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
@@ -208,17 +300,41 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.ColumnSpan="2" Text="{Binding WindowTitle}" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" />
-                    <TextBlock Grid.Row="1" Text="Autore" VerticalAlignment="Center" Margin="0,0,12,10" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Mauro Bettinelli" VerticalAlignment="Center" Margin="0,0,0,10" />
-                    <TextBlock Grid.Row="2" Text="Licenza" VerticalAlignment="Center" Margin="0,0,12,18" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="MIT" VerticalAlignment="Center" Margin="0,0,0,18" />
-                    <CheckBox Grid.Row="3"
-                              Grid.Column="1"
-                              Content="Logging diagnostico API/SOAP (senza password)"
-                              IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
-                              Margin="0,0,0,10" />
+                    <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,34">
+                        <TextBlock Text="Carbonio Mail Archiver" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding AppVersion, StringFormat=Versione {0}}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding AppDescription}" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Text="Licenza" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LicenseName}" VerticalAlignment="Center" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="2" Text="Copyright" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CopyrightText}" VerticalAlignment="Center" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="3" Text="Configurazione" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ConfigurationPath}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="4" Text="AppData" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ApplicationDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="5" Text="Log" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LogDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="6" Text="Eseguibile" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,22" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ExecutableDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
+
+                    <WrapPanel Grid.Row="7" Grid.ColumnSpan="2" Margin="0,0,0,16">
+                        <Button Content="Open AppData" Command="{Binding OpenAppDataCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Open Logs" Command="{Binding OpenLogsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Open Repository" Command="{Binding OpenRepositoryCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Report Issue" Command="{Binding ReportIssueCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Open Releases" Command="{Binding OpenReleasesCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Open License" Command="{Binding OpenLicenseCommand}" Width="178" Margin="0,0,10,8" />
+                    </WrapPanel>
+
                 </Grid>
             </TabItem>
         </TabControl>

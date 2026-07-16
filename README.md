@@ -13,7 +13,7 @@ Base applicativa completata:
 - Dependency Injection tramite `Microsoft.Extensions.Hosting`;
 - configurazione utente in `%LocalAppData%\CarbonioMailArchiver\settings.json`;
 - salvataggio password tramite DPAPI utente Windows;
-- logging giornaliero in `%LocalAppData%\CarbonioMailArchiver\Logs`;
+- logging giornaliero nella cartella `Logs` accanto all'eseguibile;
 - modelli e interfacce principali del dominio;
 - test unitario iniziale per la costruzione query.
 
@@ -27,7 +27,7 @@ Funzioni operative disponibili:
 - caricamento automatico cartelle all'avvio dopo un primo caricamento riuscito;
 - conteggio effettivo dei messaggi con ricerca paginata;
 - spostamento reale della preview;
-- spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata;
+- spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata e limite configurabile fino a 100;
 - limite opzionale del numero di email da spostare (`0` = tutte);
 - progress bar, annullamento cooperativo e log operazione;
 - report CSV automatico in `%LocalAppData%\CarbonioMailArchiver\Reports`.
@@ -89,7 +89,7 @@ Ogni spostamento batch genera un CSV in `%LocalAppData%\CarbonioMailArchiver\Rep
 - esito finale;
 - riga per ogni messaggio selezionato, con stato `Spostato`, `Errore` o `Non spostato`.
 
-La dimensione batch controlla quante email vengono inviate in una singola richiesta di spostamento. Il valore predefinito e' 50. Il limite email e' separato: ad esempio, con limite 1001 e batch 50, l'app esegue 20 batch da 50 messaggi e un batch finale da 1 messaggio.
+La dimensione batch controlla quante email vengono inviate in una singola richiesta di spostamento. Il valore predefinito e' 50, il minimo configurabile e' 10 e il massimo configurabile e' 100. Il limite email e' separato: ad esempio, con limite 1001 e batch 50, l'app esegue 20 batch da 50 messaggi e un batch finale da 1 messaggio.
 
 ## Build
 

@@ -11,4 +11,7 @@ public sealed class CarbonioConnectionSettings
   public bool AutoLoadFoldersOnStartup { get; set; }
   public int TimeoutSeconds { get; set; } = 100;
   public int PreviewMessageLimit { get; set; } = 10;
+  public int BatchSize { get; set; } = 50;
+  public int MaxMessagesToMove { get; set; }
+  public string SearchBeforeDate { get; set; } = string.Empty;
 }

@@ -10,7 +10,7 @@ public sealed class DailyFileLoggerProvider : ILoggerProvider
 
   public DailyFileLoggerProvider()
   {
-    _directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CarbonioMailArchiver", "Logs");
+    _directory = LogPath.Current;
     Directory.CreateDirectory(_directory);
   }
 
@@ -62,7 +62,7 @@ public sealed class OperationLogService : IOperationLogService
 {
   public OperationLogService()
   {
-    LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CarbonioMailArchiver", "Logs");
+    LogDirectory = LogPath.Current;
     Directory.CreateDirectory(LogDirectory);
   }
 
@@ -94,4 +94,9 @@ public sealed class OperationLogService : IOperationLogService
 
     return Task.CompletedTask;
   }
+}
+
+internal static class LogPath
+{
+  public static string Current => Path.Combine(AppContext.BaseDirectory, "Logs");
 }

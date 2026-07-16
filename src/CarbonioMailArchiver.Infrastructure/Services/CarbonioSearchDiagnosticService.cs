@@ -31,7 +31,7 @@ public sealed class CarbonioSearchDiagnosticService(
       }
 
       var query = _queryBuilder.BuildInboxBeforeQuery(request);
-      var response = await client.PostSearchAsync(query, Math.Clamp(request.Limit, 1, 50), Math.Max(request.Offset, 0), cancellationToken);
+      var response = await client.PostSearchAsync(query, Math.Clamp(request.Limit, 1, 100), Math.Max(request.Offset, 0), cancellationToken);
       var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
       if (!response.IsSuccessStatusCode)

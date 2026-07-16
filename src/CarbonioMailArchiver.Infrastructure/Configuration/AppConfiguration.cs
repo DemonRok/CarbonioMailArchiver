@@ -17,8 +17,12 @@ public sealed class AppConfiguration
     var directory = applicationDirectory
       ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CarbonioMailArchiver");
     Directory.CreateDirectory(directory);
+    ApplicationDirectory = directory;
     _settingsPath = Path.Combine(directory, "settings.json");
   }
+
+  public string ApplicationDirectory { get; }
+  public string SettingsPath => _settingsPath;
 
   public async Task<CarbonioConnectionSettings> LoadConnectionSettingsAsync(CancellationToken cancellationToken)
   {

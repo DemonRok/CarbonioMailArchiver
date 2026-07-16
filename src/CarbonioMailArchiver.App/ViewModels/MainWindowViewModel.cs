@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -49,6 +51,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
+  private const string RepositoryUrl = "https://github.com/DemonRok/CarbonioMailArchiver";
+  private const string ReleasesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/releases";
+  private const string IssuesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/issues";
   private static readonly string CurrentVersion =
     typeof(MainWindowViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
     ?? "dev";
@@ -89,6 +94,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
     LogDirectory = operationLogService.LogDirectory;
+    OpenAppDataCommand = new AsyncRelayCommand(() => OpenPathAsync(ApplicationDirectory));
+    OpenLogsCommand = new AsyncRelayCommand(() => OpenPathAsync(LogDirectory));
+    OpenRepositoryCommand = new AsyncRelayCommand(() => OpenPathAsync(RepositoryUrl));
+    OpenReleasesCommand = new AsyncRelayCommand(() => OpenPathAsync(ReleasesUrl));
+    OpenLicenseCommand = new AsyncRelayCommand(OpenLicenseAsync);
+    ReportIssueCommand = new AsyncRelayCommand(() => OpenPathAsync(IssuesUrl));
+    RestoreConfigurationDefaultsCommand = new AsyncRelayCommand(RestoreConfigurationDefaultsAsync);
   }
 
   public event PropertyChangedEventHandler? PropertyChanged;
@@ -105,11 +117,38 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
+  public ICommand OpenAppDataCommand { get; }
+  public ICommand OpenLogsCommand { get; }
+  public ICommand OpenRepositoryCommand { get; }
+  public ICommand OpenReleasesCommand { get; }
+  public ICommand OpenLicenseCommand { get; }
+  public ICommand ReportIssueCommand { get; }
+  public ICommand RestoreConfigurationDefaultsCommand { get; }
+  public ICommand DecreasePreviewMessageLimitCommand => new AsyncRelayCommand(() => UpdatePreviewMessageLimitAsync(-1));
+  public ICommand IncreasePreviewMessageLimitCommand => new AsyncRelayCommand(() => UpdatePreviewMessageLimitAsync(1));
+  public ICommand DecreaseBatchSizeCommand => new AsyncRelayCommand(() => UpdateBatchSizeAsync(-1));
+  public ICommand IncreaseBatchSizeCommand => new AsyncRelayCommand(() => UpdateBatchSizeAsync(1));
+  public ICommand DecreaseMaxMessagesToMoveCommand => new AsyncRelayCommand(() => UpdateMaxMessagesToMoveAsync(-1));
+  public ICommand IncreaseMaxMessagesToMoveCommand => new AsyncRelayCommand(() => UpdateMaxMessagesToMoveAsync(1));
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public string LogDirectory { get; }
+  public string ApplicationDirectory => _configuration.ApplicationDirectory;
+  public string ConfigurationPath => _configuration.SettingsPath;
+  public string ExecutableDirectory
+  {
+    get
+    {
+      var directory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+      return string.IsNullOrWhiteSpace(directory) ? AppContext.BaseDirectory : directory;
+    }
+  }
+  public string AppVersion => CurrentVersion;
   public string WindowTitle => $"Carbonio Mail Archiver {CurrentVersion}";
+  public string LicenseName => "MIT License";
+  public string CopyrightText => "Copyright (c) 2026 Mauro Bettinelli";
+  public string AppDescription => "Archiviazione e spostamento email Carbonio via API server";
 
   public string BaseUrl
   {
@@ -171,6 +210,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _diagnosticSoapLoggingEnabled, value);
   }
 
+  public bool AutoLoadFoldersOnStartup
+  {
+    get => _autoLoadFoldersOnStartup;
+    set => SetField(ref _autoLoadFoldersOnStartup, value);
+  }
+
   public int TimeoutSeconds
   {
     get => _timeoutSeconds;
@@ -180,19 +225,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public int PreviewMessageLimit
   {
     get => _previewMessageLimit;
-    set => SetField(ref _previewMessageLimit, value);
+    set => SetField(ref _previewMessageLimit, Math.Clamp(value, 1, 100));
   }
 
   public int BatchSize
   {
     get => _batchSize;
-    set => SetField(ref _batchSize, value);
+    set => SetField(ref _batchSize, Math.Clamp(value, 10, 100));
   }
 
   public int MaxMessagesToMove
   {
     get => _maxMessagesToMove;
-    set => SetField(ref _maxMessagesToMove, value);
+    set => SetField(ref _maxMessagesToMove, Math.Max(value, 0));
   }
 
   public bool IsMoveInProgress
@@ -251,7 +296,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public async Task InitializeAsync()
   {
     await LoadAsync();
-    if (_autoLoadFoldersOnStartup && !string.IsNullOrEmpty(Password) && ValidateConnectionFields(ToSettings()) is null)
+    if (AutoLoadFoldersOnStartup && !string.IsNullOrEmpty(Password) && ValidateConnectionFields(ToSettings()) is null)
     {
       await LoadFoldersAsync();
     }
@@ -267,9 +312,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     Email = settings.Email;
     RememberCredentials = settings.RememberCredentials;
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
-    _autoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
+    AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
     TimeoutSeconds = settings.TimeoutSeconds;
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
+    BatchSize = Math.Clamp(settings.BatchSize, 10, 100);
+    MaxMessagesToMove = Math.Max(settings.MaxMessagesToMove, 0);
+    if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
+    {
+      SearchBeforeDate = savedSearchBeforeDate;
+    }
+
     Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
     StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
       ? "Configurazione caricata. Password protetta caricata da DPAPI."
@@ -306,6 +358,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
 
     StatusMessage = "Test connessione in corso...";
@@ -326,6 +379,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
     StatusMessage = "Caricamento cartelle in corso...";
     var foldersById = await _folderDiagnosticService.GetFoldersByIdAsync(settings, password, CancellationToken.None);
@@ -341,14 +395,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
-
-    if (AvailableFolders.Count > 0)
-    {
-      var updatedSettings = ToSettings();
-      updatedSettings.AutoLoadFoldersOnStartup = true;
-      await _configuration.SaveConnectionSettingsAsync(updatedSettings, CancellationToken.None);
-      _autoLoadFoldersOnStartup = true;
-    }
 
     await RefreshLogsAsync();
   }
@@ -369,6 +415,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
     var sourceFolderQuery = SelectedSourceFolder is null ? "in:inbox" : $"inid:{SelectedSourceFolder.Id}";
     var request = new MailSearchRequest(beforeDate, Math.Clamp(PreviewMessageLimit, 1, 100), sourceFolderQuery);
@@ -402,6 +449,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var sourceFolder = SelectedSourceFolder!;
     var destinationFolder = SelectedDestinationFolder!;
+    await SaveSettingsSnapshotAsync();
     _logger.LogInformation(
       "Simulazione spostamento: {Count} messaggi da {SourceFolder} ({SourceId}) a {DestinationFolder} ({DestinationId}).",
       PreviewMessages.Count,
@@ -446,6 +494,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var password = await GetPasswordAsync(settings);
+    await SaveSettingsSnapshotAsync();
     var messageIds = PreviewMessages.Select(message => message.Id).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToArray();
     StatusMessage = "Spostamento reale in corso...";
     var result = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIds, destinationFolder.Id, CancellationToken.None);
@@ -491,7 +540,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var sourceFolder = SelectedSourceFolder!;
     var destinationFolder = SelectedDestinationFolder!;
-    var batchSize = Math.Clamp(BatchSize, 1, 50);
+    await SaveSettingsSnapshotAsync();
+    var batchSize = Math.Clamp(BatchSize, 10, 100);
     var maxMessagesToMove = Math.Max(MaxMessagesToMove, 0);
     var password = await GetPasswordAsync(settings);
     var sourceFolderQuery = $"inid:{sourceFolder.Id}";
@@ -786,6 +836,70 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = "Log cancellato.";
   }
 
+  private Task UpdatePreviewMessageLimitAsync(int delta)
+  {
+    PreviewMessageLimit = Math.Clamp(PreviewMessageLimit + delta, 1, 100);
+    return Task.CompletedTask;
+  }
+
+  private Task UpdateBatchSizeAsync(int delta)
+  {
+    BatchSize = Math.Clamp(BatchSize + delta, 10, 100);
+    return Task.CompletedTask;
+  }
+
+  private Task UpdateMaxMessagesToMoveAsync(int delta)
+  {
+    MaxMessagesToMove = Math.Max(MaxMessagesToMove + delta, 0);
+    return Task.CompletedTask;
+  }
+
+  private Task RestoreConfigurationDefaultsAsync()
+  {
+    TimeoutSeconds = 100;
+    PreviewMessageLimit = 10;
+    BatchSize = 50;
+    MaxMessagesToMove = 0;
+    AutoLoadFoldersOnStartup = false;
+    DiagnosticSoapLoggingEnabled = false;
+    StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
+    return Task.CompletedTask;
+  }
+
+  private Task OpenLicenseAsync()
+  {
+    var licensePath = Path.Combine(AppContext.BaseDirectory, "LICENSE");
+    if (!File.Exists(licensePath))
+    {
+      licensePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "LICENSE"));
+    }
+
+    return OpenPathAsync(File.Exists(licensePath) ? licensePath : RepositoryUrl);
+  }
+
+  private Task OpenPathAsync(string pathOrUrl)
+  {
+    try
+    {
+      if (!pathOrUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+      {
+        var directory = Path.HasExtension(pathOrUrl) ? Path.GetDirectoryName(pathOrUrl) : pathOrUrl;
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+          Directory.CreateDirectory(directory);
+        }
+      }
+
+      Process.Start(new ProcessStartInfo(pathOrUrl) { UseShellExecute = true });
+    }
+    catch (Exception ex)
+    {
+      StatusMessage = $"Impossibile aprire: {pathOrUrl}. {ex.Message}";
+    }
+
+    return Task.CompletedTask;
+  }
+
   private CarbonioConnectionSettings ToSettings()
   {
     return new CarbonioConnectionSettings
@@ -796,10 +910,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
-      AutoLoadFoldersOnStartup = _autoLoadFoldersOnStartup,
+      AutoLoadFoldersOnStartup = AutoLoadFoldersOnStartup,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600),
-      PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100)
+      PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100),
+      BatchSize = Math.Clamp(BatchSize, 10, 100),
+      MaxMessagesToMove = Math.Max(MaxMessagesToMove, 0),
+      SearchBeforeDate = TryParseSearchBeforeDate(out var beforeDate) ? beforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : SearchBeforeDate.Trim()
     };
+  }
+
+  private Task SaveSettingsSnapshotAsync()
+  {
+    return _configuration.SaveConnectionSettingsAsync(ToSettings(), CancellationToken.None);
   }
 
   private async Task<string> GetPasswordAsync(CarbonioConnectionSettings settings)
@@ -849,6 +971,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       CultureInfo.InvariantCulture,
       DateTimeStyles.None,
       out beforeDate);
+  }
+
+  private static bool TryNormalizeSavedSearchBeforeDate(string value, out string normalized)
+  {
+    normalized = string.Empty;
+    if (string.IsNullOrWhiteSpace(value))
+    {
+      return false;
+    }
+
+    if (!DateOnly.TryParseExact(
+      value.Trim(),
+      "dd/MM/yyyy",
+      CultureInfo.InvariantCulture,
+      DateTimeStyles.None,
+      out var parsed))
+    {
+      return false;
+    }
+
+    normalized = parsed.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+    return true;
   }
 
   private void UpdateMoveProgress(int movedCount, int? expectedTotal, string batchText, string detailText)
