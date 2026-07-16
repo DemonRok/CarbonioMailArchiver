@@ -424,7 +424,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
     StatusMessage = "Caricamento cartelle in corso...";
-    var foldersById = await _folderDiagnosticService.GetFoldersByIdAsync(settings, password, CancellationToken.None);
+    MoveProgressPercentage = 0;
+    MoveProgressPercentText = string.Empty;
+    IsMoveProgressIndeterminate = true;
+    MoveBatchText = "Caricamento cartelle";
+    MoveDetailText = "Lettura elenco cartelle dal server...";
+    MoveProgressText = MoveDetailText;
+
+    IReadOnlyDictionary<string, MailFolder> foldersById;
+    try
+    {
+      foldersById = await _folderDiagnosticService.GetFoldersByIdAsync(settings, password, CancellationToken.None);
+    }
+    finally
+    {
+      IsMoveProgressIndeterminate = false;
+    }
+
     AvailableFolders.Clear();
 
     foreach (var folder in foldersById.Values.OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase))
@@ -441,6 +457,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
+    MoveBatchText = StatusMessage;
+    MoveDetailText = "Elenco cartelle aggiornato.";
+    MoveProgressText = MoveDetailText;
     await SaveSettingsSnapshotAsync();
 
     await RefreshLogsAsync();
