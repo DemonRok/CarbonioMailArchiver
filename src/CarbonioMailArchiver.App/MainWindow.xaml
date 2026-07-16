@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="{Binding WindowTitle}" Height="845" MinHeight="560" Width="1110" MinWidth="780">
+        Title="{Binding WindowTitle}" Height="844" MinHeight="560" Width="1118" MinWidth="780">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -146,7 +146,7 @@
                               SelectionMode="Extended"
                               SelectionUnit="FullRow"
                               MinHeight="260"
-                              Margin="0,10,0,0">
+                              Margin="0,5,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Data" Binding="{Binding Date}" Width="150" />
                             <DataGridTextColumn Header="Mittente" Binding="{Binding From}" Width="220" />
@@ -251,13 +251,15 @@
                               Content="Logging diagnostico API/SOAP (senza password)"
                               IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
                               Margin="0,0,0,10" />
-                    <TextBlock Grid.Row="4"
-                               Grid.ColumnSpan="2"
-                               TextWrapping="Wrap"
-                               Foreground="#555"
-                               Margin="0,12,0,0"
-                               Text="Preview controlla quante email vengono mostrate dal Test ricerca, senza spostarle. Batch move controlla quante email vengono inviate al server per ogni richiesta di spostamento. Da spostare limita il numero totale di email da muovere: 0 significa tutte quelle trovate. Carica cartelle all'avvio usa la password salvata con DPAPI, se disponibile. Il logging diagnostico registra dettagli tecnici API/SOAP senza salvare password." />
-                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
+                    <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                        <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta di spostamento." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Da spostare: limite totale di email da muovere; 0 significa tutte quelle trovate." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
                         <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" Margin="0,0,10,0" />
                         <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" />
                     </StackPanel>

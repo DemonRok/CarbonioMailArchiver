@@ -22,14 +22,16 @@ Funzioni operative disponibili:
 - login reale tramite `POST /zx/auth/v2/login`;
 - cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
 - test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- test ricerca in sola lettura con `SearchRequest`, preview a 10 messaggi;
+- test ricerca in sola lettura con `SearchRequest`, preview configurabile fino a 100 messaggi;
 - caricamento cartelle e selezione sorgente/destinazione in UI;
-- caricamento automatico cartelle all'avvio dopo un primo caricamento riuscito;
+- caricamento automatico cartelle all'avvio, opzionale, se la password e' disponibile tramite DPAPI;
 - conteggio effettivo dei messaggi con ricerca paginata;
 - spostamento reale della preview;
 - spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata e limite configurabile fino a 100;
 - limite opzionale del numero di email da spostare (`0` = tutte);
 - progress bar, annullamento cooperativo e log operazione;
+- configurazione dedicata con reset default e descrizione opzioni;
+- tab Info con versione, percorsi, licenza e link utili;
 - report CSV automatico in `%LocalAppData%\CarbonioMailArchiver\Reports`.
 
 ## Struttura
@@ -119,11 +121,15 @@ dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c R
 
 La build Release non genera PDB. L'eseguibile pubblicato si trova in `artifacts\release\CarbonioMailArchiver\CarbonioMailArchiver.App.exe`.
 
+## Changelog
+
+Le modifiche principali sono tracciate in `CHANGELOG.md`. Ogni release deve aggiornare `Directory.Build.props` e aggiungere una voce al changelog prima del tag.
+
 ## Release GitHub
 
 Il workflow `.github/workflows/release.yml` compila, esegue i test, pubblica la versione Release win-x64 self-contained senza PDB e genera uno ZIP.
 
-Quando verra' creato un tag `v*`, il workflow aprira' una draft release GitHub con lo ZIP allegato. I tag e la pubblicazione finale della release restano manuali.
+Quando viene creato un tag `v*`, il workflow crea una release GitHub pubblica con lo ZIP allegato.
 
 ## Sicurezza
 
