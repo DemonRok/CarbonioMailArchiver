@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.2.2] - In preparazione
+
+- Corretto il salvataggio di sorgente/destinazione dopo il caricamento cartelle.
+
 ## [1.2.1] - In preparazione
 
 - Salvata e ripristinata l'ultima coppia di cartelle sorgente/destinazione selezionata.

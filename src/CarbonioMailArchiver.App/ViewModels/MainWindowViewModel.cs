@@ -198,13 +198,37 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public FolderSelectionViewModel? SelectedSourceFolder
   {
     get => _selectedSourceFolder;
-    set => SetField(ref _selectedSourceFolder, value);
+    set
+    {
+      if (EqualityComparer<FolderSelectionViewModel?>.Default.Equals(_selectedSourceFolder, value))
+      {
+        return;
+      }
+
+      SetField(ref _selectedSourceFolder, value);
+      if (value is not null)
+      {
+        _lastSourceFolderId = value.Id;
+      }
+    }
   }
 
   public FolderSelectionViewModel? SelectedDestinationFolder
   {
     get => _selectedDestinationFolder;
-    set => SetField(ref _selectedDestinationFolder, value);
+    set
+    {
+      if (EqualityComparer<FolderSelectionViewModel?>.Default.Equals(_selectedDestinationFolder, value))
+      {
+        return;
+      }
+
+      SetField(ref _selectedDestinationFolder, value);
+      if (value is not null)
+      {
+        _lastDestinationFolderId = value.Id;
+      }
+    }
   }
 
   public bool RememberCredentials
@@ -417,6 +441,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
+    await SaveSettingsSnapshotAsync();
 
     await RefreshLogsAsync();
   }
