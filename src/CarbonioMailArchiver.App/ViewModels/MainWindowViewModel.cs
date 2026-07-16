@@ -30,6 +30,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _email = string.Empty;
   private string _password = string.Empty;
   private string _recentLogText = string.Empty;
+  private string? _lastReportPath;
+  private string _lastSourceFolderId = string.Empty;
+  private string _lastDestinationFolderId = string.Empty;
   private string _searchBeforeDate = DateTime.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
   private FolderSelectionViewModel? _selectedSourceFolder;
@@ -37,6 +40,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
   private bool _autoLoadFoldersOnStartup;
+  private bool _promptReportExportAfterMove = true;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -96,6 +100,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     LogDirectory = operationLogService.LogDirectory;
     OpenAppDataCommand = new AsyncRelayCommand(() => OpenPathAsync(ApplicationDirectory));
     OpenLogsCommand = new AsyncRelayCommand(() => OpenPathAsync(LogDirectory));
+    OpenReportsCommand = new AsyncRelayCommand(() => OpenPathAsync(ReportDirectory));
+    OpenLastReportCommand = new AsyncRelayCommand(OpenLastReportAsync);
     OpenRepositoryCommand = new AsyncRelayCommand(() => OpenPathAsync(RepositoryUrl));
     OpenReleasesCommand = new AsyncRelayCommand(() => OpenPathAsync(ReleasesUrl));
     OpenLicenseCommand = new AsyncRelayCommand(OpenLicenseAsync);
@@ -119,6 +125,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand ClearLogsCommand { get; }
   public ICommand OpenAppDataCommand { get; }
   public ICommand OpenLogsCommand { get; }
+  public ICommand OpenReportsCommand { get; }
+  public ICommand OpenLastReportCommand { get; }
   public ICommand OpenRepositoryCommand { get; }
   public ICommand OpenReleasesCommand { get; }
   public ICommand OpenLicenseCommand { get; }
@@ -134,6 +142,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public string LogDirectory { get; }
+  public string ReportDirectory => _operationReportService.ReportDirectory;
   public string ApplicationDirectory => _configuration.ApplicationDirectory;
   public string ConfigurationPath => _configuration.SettingsPath;
   public string ExecutableDirectory
@@ -214,6 +223,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _autoLoadFoldersOnStartup;
     set => SetField(ref _autoLoadFoldersOnStartup, value);
+  }
+
+  public bool PromptReportExportAfterMove
+  {
+    get => _promptReportExportAfterMove;
+    set => SetField(ref _promptReportExportAfterMove, value);
   }
 
   public int TimeoutSeconds
@@ -310,9 +325,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     BaseUrl = settings.BaseUrl;
     SoapUrl = settings.SoapUrl;
     Email = settings.Email;
+    _lastSourceFolderId = settings.LastSourceFolderId;
+    _lastDestinationFolderId = settings.LastDestinationFolderId;
     RememberCredentials = settings.RememberCredentials;
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
     AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
+    PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
     TimeoutSeconds = settings.TimeoutSeconds;
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
     BatchSize = Math.Clamp(settings.BatchSize, 10, 100);
@@ -390,8 +408,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AvailableFolders.Add(new FolderSelectionViewModel(folder));
     }
 
-    SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == "2") ?? AvailableFolders.FirstOrDefault();
-    SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id) ?? SelectedSourceFolder;
+    SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
+      ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
+      ?? AvailableFolders.FirstOrDefault();
+    SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId && folder.Id != SelectedSourceFolder?.Id)
+      ?? AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id)
+      ?? SelectedSourceFolder;
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
@@ -639,7 +661,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             reportRows[reportOffset++] = new MoveOperationReportRow(failedId, "Errore", moveResult.Fault?.Reason);
           }
 
-          var errorReportPath = await SaveMoveReportAsync(
+          var errorReportPath = await AskAndSaveMoveReportAsync(
             operationStartedAt,
             settings.Email,
             sourceFolder,
@@ -651,7 +673,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             "Interrotto per errore",
             CancellationToken.None);
           StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
-          StatusMessage += $" Report: {errorReportPath}";
+          StatusMessage += FormatReportStatus(errorReportPath);
           await RefreshLogsAsync();
           return;
         }
@@ -673,7 +695,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
       PreviewMessages.Clear();
       UpdateMoveProgress(movedCount, movedCount, "Spostamento completato", $"{movedCount} messaggi spostati.");
-      var successReportPath = await SaveMoveReportAsync(
+      var successReportPath = await AskAndSaveMoveReportAsync(
         operationStartedAt,
         settings.Email,
         sourceFolder,
@@ -684,12 +706,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         reportRows,
         "Completato",
         CancellationToken.None);
-      StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}. Report: {successReportPath}";
+      StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
       await RefreshLogsAsync();
     }
     catch (OperationCanceledException)
     {
-      var reportPath = await SaveMoveReportAsync(
+      var reportPath = await AskAndSaveMoveReportAsync(
         operationStartedAt,
         settings.Email,
         sourceFolder,
@@ -701,7 +723,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         "Annullato",
         CancellationToken.None);
       StatusMessage = "Spostamento annullato dall'utente. L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
-      StatusMessage += $" Report: {reportPath}";
+      StatusMessage += FormatReportStatus(reportPath);
       MoveProgressText = "Spostamento annullato.";
       MoveBatchText = "Spostamento annullato";
       MoveDetailText = "L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
@@ -805,6 +827,56 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return _operationReportService.ExportMoveReportAsync(report, cancellationToken);
   }
 
+  private async Task<string?> AskAndSaveMoveReportAsync(
+    DateTimeOffset startedAt,
+    string account,
+    FolderSelectionViewModel sourceFolder,
+    FolderSelectionViewModel destinationFolder,
+    DateOnly beforeDate,
+    int batchSize,
+    int requestedLimit,
+    IReadOnlyList<MoveOperationReportRow> rows,
+    string result,
+    CancellationToken cancellationToken)
+  {
+    if (!PromptReportExportAfterMove)
+    {
+      return null;
+    }
+
+    var confirmation = MessageBox.Show(
+      "Esportare un report CSV dell'operazione?",
+      "Report operazione",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Question,
+      MessageBoxResult.Yes);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      return null;
+    }
+
+    var path = await SaveMoveReportAsync(
+      startedAt,
+      account,
+      sourceFolder,
+      destinationFolder,
+      beforeDate,
+      batchSize,
+      requestedLimit,
+      rows,
+      result,
+      cancellationToken);
+    _lastReportPath = path;
+    return path;
+  }
+
+  private static string FormatReportStatus(string? reportPath)
+  {
+    return string.IsNullOrWhiteSpace(reportPath)
+      ? " Report non esportato."
+      : $" Report: {reportPath}";
+  }
+
   private async Task RefreshLogsAsync()
   {
     RecentLogLines.Clear();
@@ -862,6 +934,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
     DiagnosticSoapLoggingEnabled = false;
+    PromptReportExportAfterMove = true;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
     return Task.CompletedTask;
   }
@@ -875,6 +948,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     return OpenPathAsync(File.Exists(licensePath) ? licensePath : RepositoryUrl);
+  }
+
+  private Task OpenLastReportAsync()
+  {
+    if (!string.IsNullOrWhiteSpace(_lastReportPath) && File.Exists(_lastReportPath))
+    {
+      return OpenPathAsync(_lastReportPath);
+    }
+
+    var lastReport = Directory
+      .EnumerateFiles(ReportDirectory, "move-report-*.csv")
+      .OrderByDescending(File.GetLastWriteTimeUtc)
+      .FirstOrDefault();
+    return OpenPathAsync(lastReport ?? ReportDirectory);
   }
 
   private Task OpenPathAsync(string pathOrUrl)
@@ -907,6 +994,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       BaseUrl = BaseUrl.Trim(),
       SoapUrl = SoapUrl.Trim(),
       Email = Email.Trim(),
+      LastSourceFolderId = SelectedSourceFolder?.Id ?? _lastSourceFolderId,
+      LastDestinationFolderId = SelectedDestinationFolder?.Id ?? _lastDestinationFolderId,
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
@@ -915,6 +1004,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100),
       BatchSize = Math.Clamp(BatchSize, 10, 100),
       MaxMessagesToMove = Math.Max(MaxMessagesToMove, 0),
+      PromptReportExportAfterMove = PromptReportExportAfterMove,
       SearchBeforeDate = TryParseSearchBeforeDate(out var beforeDate) ? beforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : SearchBeforeDate.Trim()
     };
   }

@@ -2,11 +2,18 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
-## [1.1.1] - In preparazione
+## [1.2.1] - In preparazione
+
+- Salvata e ripristinata l'ultima coppia di cartelle sorgente/destinazione selezionata.
+- Migliorata la validazione dei campi numerici bloccando testo non numerico e incolla non valido.
+- Rimossa dalla documentazione la creazione cartelle da app come attivita' prevista.
+
+## [1.1.1] - 2026-07-16
 
 - Impostata la dimensione iniziale finestra a 1118x844.
 - Alzata la preview e aumentata leggermente l'area utile.
 - Migliorata la descrizione delle opzioni nella tab Configurazione.
+- Aggiunta gestione report CSV opzionale con cartella Reports e apertura ultimo report.
 - Aggiornata la documentazione di progetto e introdotto il changelog.
 
 ## [1.1.0] - 2026-07-16

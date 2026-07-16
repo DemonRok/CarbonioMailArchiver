@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using CarbonioMailArchiver.App.ViewModels;
 
 namespace CarbonioMailArchiver.App;
@@ -27,5 +29,25 @@ public partial class MainWindow : Window
   private void PasswordInput_OnPasswordChanged(object sender, RoutedEventArgs e)
   {
     _viewModel.Password = PasswordInput.Password;
+  }
+
+  private void NumericTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)
+  {
+    e.Handled = !e.Text.All(char.IsDigit);
+  }
+
+  private void NumericTextBox_OnPasting(object sender, DataObjectPastingEventArgs e)
+  {
+    if (!e.DataObject.GetDataPresent(DataFormats.Text))
+    {
+      e.CancelCommand();
+      return;
+    }
+
+    var text = e.DataObject.GetData(DataFormats.Text) as string;
+    if (string.IsNullOrEmpty(text) || !text.All(char.IsDigit))
+    {
+      e.CancelCommand();
+    }
   }
 }

@@ -9,10 +9,8 @@ public sealed class OperationReportService : IOperationReportService
 {
   public OperationReportService()
   {
-    ReportDirectory = Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      "CarbonioMailArchiver",
-      "Reports");
+    ReportDirectory = Path.Combine(AppContext.BaseDirectory, "Reports");
+    Directory.CreateDirectory(ReportDirectory);
   }
 
   public string ReportDirectory { get; }

@@ -30,9 +30,9 @@ Funzioni operative disponibili:
 - spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata e limite configurabile fino a 100;
 - limite opzionale del numero di email da spostare (`0` = tutte);
 - progress bar, annullamento cooperativo e log operazione;
+- report CSV opzionale al termine dello spostamento, salvato nella cartella `Reports` accanto all'eseguibile;
 - configurazione dedicata con reset default e descrizione opzioni;
 - tab Info con versione, percorsi, licenza e link utili;
-- report CSV automatico in `%LocalAppData%\CarbonioMailArchiver\Reports`.
 
 ## Struttura
 
@@ -58,9 +58,8 @@ Chiamate SOAP/API verificate o in uso:
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
 - `GetFolderRequest` per leggere ID, permessi e struttura cartelle.
 
-Da verificare/implementare:
+Da valutare in futuro:
 
-- `FolderActionRequest` o chiamata equivalente per creare cartelle da app;
 - report piu' ricco con metadati completi dei messaggi.
 
 Informazioni reali utili dal server:
@@ -82,7 +81,7 @@ Informazioni reali utili dal server:
 
 ## Report operazione
 
-Ogni spostamento batch genera un CSV in `%LocalAppData%\CarbonioMailArchiver\Reports` con:
+Se l'opzione e' abilitata, al termine di uno spostamento l'app chiede se esportare un CSV nella cartella `Reports` accanto all'eseguibile con:
 
 - account;
 - cartella sorgente e destinazione;

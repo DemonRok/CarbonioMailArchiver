@@ -173,10 +173,11 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Timeout SOAP" VerticalAlignment="Center" Margin="0,0,12,12" />
-                    <TextBox Grid.Column="1" Text="{Binding TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                            <TextBox Grid.Column="1" Text="{Binding TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
 
                     <TextBlock Grid.Row="1" Text="Parametri ricerca e move" VerticalAlignment="Center" Margin="0,0,12,12" />
                     <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,0,12">
@@ -195,7 +196,7 @@
                                 <ColumnDefinition Width="54" />
                                 <ColumnDefinition Width="18" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Text="{Binding PreviewMessageLimit, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <TextBox Text="{Binding PreviewMessageLimit, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
                             <Grid Grid.Column="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*" />
@@ -212,7 +213,7 @@
                                 <ColumnDefinition Width="54" />
                                 <ColumnDefinition Width="18" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <TextBox Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
                             <Grid Grid.Column="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*" />
@@ -229,7 +230,7 @@
                                 <ColumnDefinition Width="66" />
                                 <ColumnDefinition Width="18" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Text="{Binding MaxMessagesToMove, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+                            <TextBox Text="{Binding MaxMessagesToMove, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
                             <Grid Grid.Column="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*" />
@@ -251,15 +252,21 @@
                               Content="Logging diagnostico API/SOAP (senza password)"
                               IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
                               Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                    <CheckBox Grid.Row="4"
+                              Grid.Column="1"
+                              Content="Chiedi se esportare il report CSV al termine dello spostamento"
+                              IsChecked="{Binding PromptReportExportAfterMove}"
+                              Margin="0,0,0,10" />
+                    <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Margin="0,12,0,0">
                         <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta di spostamento." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Da spostare: limite totale di email da muovere; 0 significa tutte quelle trovate." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
+                        <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                     </StackPanel>
-                    <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
+                    <StackPanel Grid.Row="6" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
                         <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" Margin="0,0,10,0" />
                         <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" />
                     </StackPanel>
@@ -308,6 +315,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,34">
                         <TextBlock Text="Carbonio Mail Archiver" FontSize="18" FontWeight="SemiBold" />
@@ -325,12 +333,16 @@
                     <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ApplicationDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
                     <TextBlock Grid.Row="5" Text="Log" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
                     <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LogDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="6" Text="Eseguibile" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,22" />
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ExecutableDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
+                    <TextBlock Grid.Row="6" Text="Report" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ReportDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
+                    <TextBlock Grid.Row="7" Text="Eseguibile" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,22" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ExecutableDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
 
-                    <WrapPanel Grid.Row="7" Grid.ColumnSpan="2" Margin="0,0,0,16">
+                    <WrapPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,0,0,16">
                         <Button Content="Open AppData" Command="{Binding OpenAppDataCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Open Logs" Command="{Binding OpenLogsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Open Reports" Command="{Binding OpenReportsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri ultimo report" Command="{Binding OpenLastReportCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Open Repository" Command="{Binding OpenRepositoryCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Report Issue" Command="{Binding ReportIssueCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Open Releases" Command="{Binding OpenReleasesCommand}" Width="178" Margin="0,0,10,8" />
