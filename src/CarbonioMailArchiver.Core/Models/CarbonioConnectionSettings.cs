@@ -10,4 +10,5 @@ public sealed class CarbonioConnectionSettings
   public bool DiagnosticSoapLoggingEnabled { get; set; }
   public bool AutoLoadFoldersOnStartup { get; set; }
   public int TimeoutSeconds { get; set; } = 100;
+  public int PreviewMessageLimit { get; set; } = 10;
 }

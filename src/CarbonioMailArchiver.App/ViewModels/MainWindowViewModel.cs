@@ -37,6 +37,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _autoLoadFoldersOnStartup;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
+  private int _previewMessageLimit = 10;
   private int _batchSize = 50;
   private int _maxMessagesToMove;
   private int _moveProgressPercentage;
@@ -176,6 +177,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _timeoutSeconds, value);
   }
 
+  public int PreviewMessageLimit
+  {
+    get => _previewMessageLimit;
+    set => SetField(ref _previewMessageLimit, value);
+  }
+
   public int BatchSize
   {
     get => _batchSize;
@@ -262,6 +269,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
     _autoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
     TimeoutSeconds = settings.TimeoutSeconds;
+    PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
     Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
     StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
       ? "Configurazione caricata. Password protetta caricata da DPAPI."
@@ -363,7 +371,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var password = await GetPasswordAsync(settings);
     var sourceFolderQuery = SelectedSourceFolder is null ? "in:inbox" : $"inid:{SelectedSourceFolder.Id}";
-    var request = new MailSearchRequest(beforeDate, 10, sourceFolderQuery);
+    var request = new MailSearchRequest(beforeDate, Math.Clamp(PreviewMessageLimit, 1, 100), sourceFolderQuery);
     PreviewMessages.Clear();
     StatusMessage = "Ricerca diagnostica in corso...";
     var result = await _searchDiagnosticService.SearchInboxBeforeAsync(settings, password, request, CancellationToken.None);
@@ -789,7 +797,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
       AutoLoadFoldersOnStartup = _autoLoadFoldersOnStartup,
-      TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600)
+      TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600),
+      PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100)
     };
   }
 
