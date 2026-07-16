@@ -25,6 +25,17 @@ public sealed class MailMessagePreviewViewModel
     FolderPath = ResolveFolderPath(message.FolderId, foldersById);
   }
 
+  public MailMessagePreviewViewModel(string id, string subject, string folderPath)
+  {
+    Id = id;
+    Date = null;
+    From = string.Empty;
+    Subject = subject;
+    Size = null;
+    FolderId = id;
+    FolderPath = folderPath;
+  }
+
   public string Id { get; }
   public DateTimeOffset? Date { get; }
   public string From { get; }

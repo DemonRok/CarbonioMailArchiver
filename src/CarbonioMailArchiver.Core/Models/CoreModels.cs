@@ -20,6 +20,7 @@ public sealed class MailFolder
   public string Name { get; set; } = string.Empty;
   public string AbsolutePath { get; set; } = string.Empty;
   public string? ParentId { get; set; }
+  public int MessageCount { get; set; }
   public bool IsInbox { get; set; }
   public bool IsWritable { get; set; } = true;
   public List<MailFolder> Children { get; } = [];
@@ -39,6 +40,10 @@ public sealed record MailMoveResult(int RequestedCount, int MovedCount, IReadOnl
 }
 
 public sealed record ArchiveFolderEnsureResult(bool IsSuccess, MailFolder? Folder, string Message, IReadOnlyList<string> CreatedPaths);
+
+public sealed record FolderDeletePlanResult(bool IsSuccess, string Message, IReadOnlyList<string> CandidatePaths);
+
+public sealed record FolderDeleteResult(bool IsSuccess, string Message, int DeletedCount);
 
 public enum ArchiveOperationMode
 {

@@ -34,6 +34,12 @@ public interface IArchiveFolderService
   Task<ArchiveFolderEnsureResult> EnsureArchiveDestinationAsync(CarbonioConnectionSettings settings, string password, MailFolder sourceFolder, CancellationToken cancellationToken);
 }
 
+public interface IFolderMaintenanceService
+{
+  Task<FolderDeletePlanResult> AnalyzeEmptyFoldersAsync(CarbonioConnectionSettings settings, string password, string folderId, bool includeSubfolders, CancellationToken cancellationToken);
+  Task<FolderDeleteResult> DeleteEmptyFoldersAsync(CarbonioConnectionSettings settings, string password, string folderId, bool includeSubfolders, CancellationToken cancellationToken);
+}
+
 public interface IMoveDiagnosticService
 {
   Task<MailMoveResult> MoveMessagesAsync(CarbonioConnectionSettings settings, string password, IReadOnlyList<string> messageIds, string destinationFolderId, CancellationToken cancellationToken);

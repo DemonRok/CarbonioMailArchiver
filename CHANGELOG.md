@@ -2,6 +2,14 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.5.0] - In preparazione
+
+- Aggiunta eliminazione controllata delle cartelle sorgente/destinazione solo se vuote.
+
+## [1.4.0] - In preparazione
+
+- Aggiunta opzione per processare automaticamente sorgente e sottocartelle replicandole sotto Archivio.
+
 ## [1.3.0] - In preparazione
 
 - Aggiunta destinazione automatica in Archivio con creazione del percorso `/Archive/...` coerente con la sorgente.

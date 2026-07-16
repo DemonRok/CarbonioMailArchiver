@@ -67,13 +67,21 @@
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
 
                             <TextBlock Grid.Row="6" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <ComboBox Grid.Row="6" Grid.Column="1"
-                                      ItemsSource="{Binding AvailableFolders}"
-                                      SelectedItem="{Binding SelectedSourceFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      DisplayMemberPath="DisplayName"
-                                      MinWidth="340"
-                                      HorizontalAlignment="Left"
-                                      Margin="0,0,0,12" />
+                            <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
+                                <ComboBox ItemsSource="{Binding AvailableFolders}"
+                                          SelectedItem="{Binding SelectedSourceFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="DisplayName"
+                                          MinWidth="340"
+                                          HorizontalAlignment="Left" />
+                                <Button Content="Elimina vuote"
+                                        Command="{Binding DeleteSourceFolderIfEmptyCommand}"
+                                        Width="120"
+                                        Margin="10,0,0,0" />
+                                <CheckBox Content="Includi sottocartelle"
+                                          IsChecked="{Binding IncludeSourceSubfolders}"
+                                          VerticalAlignment="Center"
+                                          Margin="16,0,0,0" />
+                            </StackPanel>
 
                             <CheckBox Grid.Row="7"
                                       Grid.Column="1"
@@ -90,6 +98,14 @@
                                       MinWidth="340"
                                       HorizontalAlignment="Left"
                                       Margin="0,0,0,12" />
+                            <Button Grid.Row="8"
+                                    Grid.Column="1"
+                                    Content="Elimina vuote"
+                                    Command="{Binding DeleteDestinationFolderIfEmptyCommand}"
+                                    IsEnabled="{Binding IsDestinationFolderSelectionEnabled}"
+                                    Width="120"
+                                    HorizontalAlignment="Left"
+                                    Margin="350,0,0,12" />
 
                             <WrapPanel Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
                                 <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,8" />

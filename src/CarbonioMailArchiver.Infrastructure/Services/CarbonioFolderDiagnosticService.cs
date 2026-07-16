@@ -120,6 +120,7 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
       Name = name,
       ParentId = parentId,
       AbsolutePath = absolutePath,
+      MessageCount = ReadInt(element, "n") ?? 0,
       IsInbox = id == "2" || string.Equals(name, "Inbox", StringComparison.OrdinalIgnoreCase) || string.Equals(name, "Posta in arrivo", StringComparison.OrdinalIgnoreCase),
       IsWritable = !string.Equals(ReadString(element, "perm"), "r", StringComparison.OrdinalIgnoreCase)
     };
@@ -205,6 +206,23 @@ public sealed class CarbonioFolderDiagnosticService(ILogger<CarbonioFolderDiagno
       JsonValueKind.Number => property.GetRawText(),
       _ => null
     };
+  }
+
+  private static int? ReadInt(JsonElement element, string propertyName)
+  {
+    if (!TryFindDirectProperty(element, propertyName, out var property))
+    {
+      return null;
+    }
+
+    if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var number))
+    {
+      return number;
+    }
+
+    return property.ValueKind == JsonValueKind.String && int.TryParse(property.GetString(), out number)
+      ? number
+      : null;
   }
 
   private static bool TryFindDirectProperty(JsonElement element, string propertyName, out JsonElement property)

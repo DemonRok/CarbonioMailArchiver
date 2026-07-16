@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -24,6 +25,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly ISearchDiagnosticService _searchDiagnosticService;
   private readonly IFolderDiagnosticService _folderDiagnosticService;
   private readonly IArchiveFolderService _archiveFolderService;
+  private readonly IFolderMaintenanceService _folderMaintenanceService;
   private readonly IMoveDiagnosticService _moveDiagnosticService;
   private readonly IOperationReportService _operationReportService;
   private readonly ILogger<MainWindowViewModel> _logger;
@@ -43,6 +45,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _diagnosticSoapLoggingEnabled;
   private bool _autoLoadFoldersOnStartup;
   private bool _useArchiveDestination;
+  private bool _includeSourceSubfolders;
   private bool _promptReportExportAfterMove = true;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
@@ -64,6 +67,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private static readonly string CurrentVersion =
     typeof(MainWindowViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
     ?? "dev";
+  private sealed record SourceFolderScan(
+    FolderSelectionViewModel SourceFolder,
+    FolderSelectionViewModel PlannedDestinationFolder,
+    bool IsSuccess,
+    string Message,
+    IReadOnlyList<string> MessageIds);
 
   public MainWindowViewModel(
     AppConfiguration configuration,
@@ -73,6 +82,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     ISearchDiagnosticService searchDiagnosticService,
     IFolderDiagnosticService folderDiagnosticService,
     IArchiveFolderService archiveFolderService,
+    IFolderMaintenanceService folderMaintenanceService,
     IMoveDiagnosticService moveDiagnosticService,
     IOperationReportService operationReportService,
     ILogger<MainWindowViewModel> logger)
@@ -84,6 +94,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _searchDiagnosticService = searchDiagnosticService;
     _folderDiagnosticService = folderDiagnosticService;
     _archiveFolderService = archiveFolderService;
+    _folderMaintenanceService = folderMaintenanceService;
     _moveDiagnosticService = moveDiagnosticService;
     _operationReportService = operationReportService;
     _logger = logger;
@@ -112,6 +123,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OpenLicenseCommand = new AsyncRelayCommand(OpenLicenseAsync);
     ReportIssueCommand = new AsyncRelayCommand(() => OpenPathAsync(IssuesUrl));
     RestoreConfigurationDefaultsCommand = new AsyncRelayCommand(RestoreConfigurationDefaultsAsync);
+    DeleteSourceFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedSourceFolder, "sorgente"));
+    DeleteDestinationFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedDestinationFolder, "destinazione"));
   }
 
   public event PropertyChangedEventHandler? PropertyChanged;
@@ -137,6 +150,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand OpenLicenseCommand { get; }
   public ICommand ReportIssueCommand { get; }
   public ICommand RestoreConfigurationDefaultsCommand { get; }
+  public ICommand DeleteSourceFolderIfEmptyCommand { get; }
+  public ICommand DeleteDestinationFolderIfEmptyCommand { get; }
   public ICommand DecreasePreviewMessageLimitCommand => new AsyncRelayCommand(() => UpdatePreviewMessageLimitAsync(-1));
   public ICommand IncreasePreviewMessageLimitCommand => new AsyncRelayCommand(() => UpdatePreviewMessageLimitAsync(1));
   public ICommand DecreaseBatchSizeCommand => new AsyncRelayCommand(() => UpdateBatchSizeAsync(-1));
@@ -253,6 +268,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   }
 
   public bool IsDestinationFolderSelectionEnabled => !UseArchiveDestination;
+
+  public bool IncludeSourceSubfolders
+  {
+    get => _includeSourceSubfolders;
+    set => SetField(ref _includeSourceSubfolders, value);
+  }
 
   public bool RememberCredentials
   {
@@ -378,6 +399,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
     AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
     UseArchiveDestination = settings.UseArchiveDestination;
+    IncludeSourceSubfolders = settings.IncludeSourceSubfolders;
     PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
     TimeoutSeconds = settings.TimeoutSeconds;
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
@@ -645,7 +667,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var batchSize = Math.Clamp(BatchSize, 10, 100);
     var maxMessagesToMove = Math.Max(MaxMessagesToMove, 0);
     var password = await GetPasswordAsync(settings);
-    var sourceFolderQuery = $"inid:{sourceFolder.Id}";
     using var moveCancellation = new CancellationTokenSource();
     _moveCancellationTokenSource = moveCancellation;
     IsMoveInProgress = true;
@@ -657,10 +678,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveDetailText = MoveProgressText;
 
     StatusMessage = MoveProgressText;
-    (bool IsSuccess, string Message, IReadOnlyList<string> MessageIds) scanResult;
+    IReadOnlyList<SourceFolderScan> folderScans;
     try
     {
-      scanResult = await ScanMessageIdsAsync(settings, password, beforeDate, sourceFolderQuery, batchSize, maxMessagesToMove, moveCancellation.Token);
+      folderScans = await ScanSourceFoldersAsync(settings, password, sourceFolder, beforeDate, batchSize, maxMessagesToMove, moveCancellation.Token);
     }
     catch (OperationCanceledException)
     {
@@ -673,15 +694,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    if (!scanResult.IsSuccess)
+    var failedScan = folderScans.FirstOrDefault(scan => !scan.IsSuccess);
+    if (failedScan is not null)
     {
-      StatusMessage = scanResult.Message;
+      StatusMessage = failedScan.Message;
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
     }
 
-    if (scanResult.MessageIds.Count == 0)
+    var expectedTotal = folderScans.Sum(scan => scan.MessageIds.Count);
+    if (expectedTotal == 0)
     {
       StatusMessage = "Nessun messaggio trovato da spostare.";
       PreviewMessages.Clear();
@@ -690,7 +713,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    var expectedTotal = scanResult.MessageIds.Count;
     MoveProgressPercentage = 0;
     IsMoveProgressIndeterminate = false;
     MoveProgressPercentText = "0%";
@@ -701,8 +723,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var limitDescription = maxMessagesToMove == 0
       ? "tutti i messaggi trovati"
       : $"massimo {maxMessagesToMove.ToString(CultureInfo.InvariantCulture)} messaggi";
+    var folderDescription = folderScans.Count == 1
+      ? sourceFolder.AbsolutePath
+      : $"{sourceFolder.AbsolutePath} e {folderScans.Count - 1} sottocartelle";
     var confirmation = MessageBox.Show(
-      $"Spostare realmente {totalDescription} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?\n\nData limite: prima del {beforeDate:dd/MM/yyyy}\nLimite richiesto: {limitDescription}\nBatch: {batchSize} messaggi per volta",
+      $"Spostare realmente {totalDescription} messaggi da {folderDescription} a {destinationFolder.AbsolutePath}?\n\nData limite: prima del {beforeDate:dd/MM/yyyy}\nLimite richiesto: {limitDescription}\nBatch: {batchSize} messaggi per volta",
       "Conferma spostamento batch",
       MessageBoxButton.YesNo,
       MessageBoxImage.Warning,
@@ -716,22 +741,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var operationStartedAt = DateTimeOffset.Now;
-    var destinationResolve = await ResolveMoveDestinationAsync(settings, password, sourceFolder, moveCancellation.Token);
-    if (!destinationResolve.IsSuccess || destinationResolve.Folder is null)
-    {
-      StatusMessage = destinationResolve.Message;
-      await RefreshLogsAsync();
-      ResetMoveProgress();
-      return;
-    }
-
-    destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
-    if (destinationResolve.CreatedPaths.Count > 0)
-    {
-      StatusMessage = $"{destinationResolve.Message} Avvio spostamento...";
-    }
-
-    var reportRows = scanResult.MessageIds
+    var operationDestinationFolder = GetPlannedDestinationFolder(sourceFolder);
+    var reportRows = folderScans.SelectMany(scan => scan.MessageIds)
       .Select(id => new MoveOperationReportRow(id, "Da spostare", null))
       .ToList();
 
@@ -741,50 +752,82 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       var batchNumber = 0;
       var reportOffset = 0;
 
-      foreach (var messageIdBatch in scanResult.MessageIds.Chunk(batchSize))
+      foreach (var folderScan in folderScans)
       {
         moveCancellation.Token.ThrowIfCancellationRequested();
-        batchNumber++;
-        UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"Spostati finora: {movedCount}/{expectedTotal} messaggi.");
-        StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
-        var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
-        if (!moveResult.IsSuccess)
+
+        var destinationResolve = await ResolveMoveDestinationAsync(settings, password, folderScan.SourceFolder, moveCancellation.Token);
+        if (!destinationResolve.IsSuccess || destinationResolve.Folder is null)
         {
-          foreach (var failedId in messageIdBatch)
+          foreach (var failedId in folderScan.MessageIds)
           {
-            reportRows[reportOffset++] = new MoveOperationReportRow(failedId, "Errore", moveResult.Fault?.Reason);
+            reportRows[reportOffset++] = new MoveOperationReportRow(failedId, "Errore", destinationResolve.Message);
           }
 
           var errorReportPath = await AskAndSaveMoveReportAsync(
             operationStartedAt,
             settings.Email,
-            sourceFolder,
-            destinationFolder,
+            folderScan.SourceFolder,
+            folderScan.PlannedDestinationFolder,
             beforeDate,
             batchSize,
             maxMessagesToMove,
             reportRows,
             "Interrotto per errore",
             CancellationToken.None);
-          StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
+          StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {destinationResolve.Message}";
           StatusMessage += FormatReportStatus(errorReportPath);
           await RefreshLogsAsync();
           return;
         }
 
-        foreach (var movedId in messageIdBatch)
+        destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
+        foreach (var messageIdBatch in folderScan.MessageIds.Chunk(batchSize))
         {
-          reportRows[reportOffset++] = new MoveOperationReportRow(movedId, "Spostato", null);
-        }
+          moveCancellation.Token.ThrowIfCancellationRequested();
+          batchNumber++;
+          UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"{folderScan.SourceFolder.AbsolutePath}: spostati finora {movedCount}/{expectedTotal} messaggi.");
+          StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
+          var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
+          if (!moveResult.IsSuccess)
+          {
+            foreach (var failedId in messageIdBatch)
+            {
+              reportRows[reportOffset++] = new MoveOperationReportRow(failedId, "Errore", moveResult.Fault?.Reason);
+            }
 
-        var previousMovedCount = movedCount;
-        movedCount += moveResult.MovedCount;
-        await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} completato", moveCancellation.Token);
-        _logger.LogInformation(
-          "Spostamento batch {BatchNumber} completato. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
-          batchNumber,
-          moveResult.MovedCount,
-          movedCount);
+            var errorReportPath = await AskAndSaveMoveReportAsync(
+              operationStartedAt,
+              settings.Email,
+              folderScan.SourceFolder,
+              destinationFolder,
+              beforeDate,
+              batchSize,
+              maxMessagesToMove,
+              reportRows,
+              "Interrotto per errore",
+              CancellationToken.None);
+            StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
+            StatusMessage += FormatReportStatus(errorReportPath);
+            await RefreshLogsAsync();
+            return;
+          }
+
+          foreach (var movedId in messageIdBatch)
+          {
+            reportRows[reportOffset++] = new MoveOperationReportRow(movedId, "Spostato", null);
+          }
+
+          var previousMovedCount = movedCount;
+          movedCount += moveResult.MovedCount;
+          await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} completato", moveCancellation.Token);
+          _logger.LogInformation(
+            "Spostamento batch {BatchNumber} completato. Cartella: {SourceFolder}. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
+            batchNumber,
+            folderScan.SourceFolder.AbsolutePath,
+            moveResult.MovedCount,
+            movedCount);
+        }
       }
 
       PreviewMessages.Clear();
@@ -793,7 +836,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         operationStartedAt,
         settings.Email,
         sourceFolder,
-        destinationFolder,
+        operationDestinationFolder,
         beforeDate,
         batchSize,
         maxMessagesToMove,
@@ -809,7 +852,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         operationStartedAt,
         settings.Email,
         sourceFolder,
-        destinationFolder,
+        operationDestinationFolder,
         beforeDate,
         batchSize,
         maxMessagesToMove,
@@ -841,6 +884,78 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return Task.CompletedTask;
   }
 
+  private async Task<IReadOnlyList<SourceFolderScan>> ScanSourceFoldersAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    FolderSelectionViewModel sourceFolder,
+    DateOnly beforeDate,
+    int batchSize,
+    int maxMessagesToMove,
+    CancellationToken cancellationToken)
+  {
+    var foldersToProcess = GetSourceFoldersToProcess(sourceFolder);
+    var scans = new List<SourceFolderScan>();
+    var remainingLimit = maxMessagesToMove;
+
+    foreach (var folder in foldersToProcess)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      if (maxMessagesToMove > 0 && remainingLimit <= 0)
+      {
+        break;
+      }
+
+      var folderLimit = maxMessagesToMove == 0 ? 0 : remainingLimit;
+      MoveBatchText = "Conteggio";
+      MoveDetailText = $"Conteggio {folder.AbsolutePath}...";
+      MoveProgressText = MoveDetailText;
+      StatusMessage = MoveDetailText;
+
+      var scanResult = await ScanMessageIdsAsync(
+        settings,
+        password,
+        beforeDate,
+        $"inid:{folder.Id}",
+        batchSize,
+        folderLimit,
+        folder.AbsolutePath,
+        cancellationToken);
+
+      scans.Add(new SourceFolderScan(
+        folder,
+        GetPlannedDestinationFolder(folder),
+        scanResult.IsSuccess,
+        scanResult.Message,
+        scanResult.MessageIds));
+
+      if (!scanResult.IsSuccess)
+      {
+        break;
+      }
+
+      if (maxMessagesToMove > 0)
+      {
+        remainingLimit -= scanResult.MessageIds.Count;
+      }
+    }
+
+    return scans;
+  }
+
+  private IReadOnlyList<FolderSelectionViewModel> GetSourceFoldersToProcess(FolderSelectionViewModel sourceFolder)
+  {
+    if (!IncludeSourceSubfolders)
+    {
+      return [sourceFolder];
+    }
+
+    var sourcePrefix = sourceFolder.AbsolutePath.TrimEnd('/') + "/";
+    return AvailableFolders
+      .Where(folder => folder.Id == sourceFolder.Id || folder.AbsolutePath.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
+      .ToArray();
+  }
+
   private async Task<(bool IsSuccess, string Message, IReadOnlyList<string> MessageIds)> ScanMessageIdsAsync(
     CarbonioConnectionSettings settings,
     string password,
@@ -848,6 +963,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     string sourceFolderQuery,
     int batchSize,
     int maxMessagesToMove,
+    string sourceFolderLabel,
     CancellationToken cancellationToken)
   {
     var messageIds = new List<string>();
@@ -858,9 +974,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       cancellationToken.ThrowIfCancellationRequested();
       MoveProgressText = maxMessagesToMove == 0
-        ? $"Conteggio effettivo in corso: {messageIds.Count} messaggi trovati..."
-        : $"Conteggio effettivo in corso: {messageIds.Count}/{maxMessagesToMove} messaggi selezionati...";
-      MoveBatchText = "Conteggio";
+        ? $"Scansione {sourceFolderLabel}: {messageIds.Count} messaggi trovati..."
+        : $"Scansione {sourceFolderLabel}: {messageIds.Count}/{maxMessagesToMove} messaggi selezionati...";
+      MoveBatchText = $"Scansione cartella";
       MoveDetailText = MoveProgressText;
       StatusMessage = MoveProgressText;
 
@@ -1002,6 +1118,66 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = "Log cancellato.";
   }
 
+  private async Task DeleteSelectedFolderIfEmptyAsync(FolderSelectionViewModel? folder, string role)
+  {
+    if (folder is null)
+    {
+      StatusMessage = $"Seleziona una cartella {role}.";
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationError = ValidateConnectionFields(settings);
+    if (validationError is not null)
+    {
+      StatusMessage = validationError;
+      return;
+    }
+
+    var password = await GetPasswordAsync(settings);
+    StatusMessage = $"Verifica cartella vuota: {folder.AbsolutePath}...";
+    try
+    {
+      var plan = await _folderMaintenanceService.AnalyzeEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
+      if (!plan.IsSuccess || plan.CandidatePaths.Count == 0)
+      {
+        StatusMessage = plan.Message;
+        await RefreshLogsAsync();
+        return;
+      }
+
+      var scope = IncludeSourceSubfolders ? "cartelle vuote trovate nel ramo selezionato" : "cartella selezionata";
+      PreviewMessages.Clear();
+      foreach (var candidatePath in plan.CandidatePaths)
+      {
+        PreviewMessages.Add(new MailMessagePreviewViewModel(candidatePath, "Cartella vuota candidata all'eliminazione", candidatePath));
+      }
+      StatusMessage = $"Cartelle vuote candidate: {plan.CandidatePaths.Count}. Controlla la preview prima di confermare.";
+
+      var confirmation = MessageBox.Show(
+        $"Eliminare {plan.CandidatePaths.Count} {scope}?\n\nL'elenco completo e' visibile nella preview.",
+        "Conferma eliminazione cartelle vuote",
+        MessageBoxButton.YesNo,
+        MessageBoxImage.Warning,
+        MessageBoxResult.No);
+      if (confirmation != MessageBoxResult.Yes)
+      {
+        StatusMessage = "Eliminazione cartella annullata.";
+        return;
+      }
+
+      var result = await _folderMaintenanceService.DeleteEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
+      StatusMessage = result.Message;
+      await LoadFoldersAsync();
+      await RefreshLogsAsync();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+    {
+      StatusMessage = $"Eliminazione cartella non completata: {ex.Message}";
+      await RefreshLogsAsync();
+    }
+  }
+
   private Task UpdatePreviewMessageLimitAsync(int delta)
   {
     PreviewMessageLimit = Math.Clamp(PreviewMessageLimit + delta, 1, 100);
@@ -1028,6 +1204,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
     UseArchiveDestination = false;
+    IncludeSourceSubfolders = false;
     DiagnosticSoapLoggingEnabled = false;
     PromptReportExportAfterMove = true;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
@@ -1092,6 +1269,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       LastSourceFolderId = SelectedSourceFolder?.Id ?? _lastSourceFolderId,
       LastDestinationFolderId = SelectedDestinationFolder?.Id ?? _lastDestinationFolderId,
       UseArchiveDestination = UseArchiveDestination,
+      IncludeSourceSubfolders = IncludeSourceSubfolders,
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
@@ -1309,6 +1487,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       return null;
+    }
+
+    if (IncludeSourceSubfolders)
+    {
+      return "L'opzione sottocartelle richiede la destinazione Archivio.";
     }
 
     if (SelectedDestinationFolder is null)

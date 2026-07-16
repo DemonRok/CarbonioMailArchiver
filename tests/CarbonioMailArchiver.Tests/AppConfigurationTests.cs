@@ -17,6 +17,8 @@ public sealed class AppConfigurationTests
       Email = "user@example.test",
       LastSourceFolderId = "2",
       LastDestinationFolderId = "23747",
+      UseArchiveDestination = true,
+      IncludeSourceSubfolders = true,
       RememberCredentials = true
     };
 
@@ -27,5 +29,7 @@ public sealed class AppConfigurationTests
     Assert.Contains("user@example.test", json, StringComparison.Ordinal);
     Assert.Contains("\"LastSourceFolderId\": \"2\"", json, StringComparison.Ordinal);
     Assert.Contains("\"LastDestinationFolderId\": \"23747\"", json, StringComparison.Ordinal);
+    Assert.Contains("\"UseArchiveDestination\": true", json, StringComparison.Ordinal);
+    Assert.Contains("\"IncludeSourceSubfolders\": true", json, StringComparison.Ordinal);
   }
 }
