@@ -38,6 +38,8 @@ public sealed record MailMoveResult(int RequestedCount, int MovedCount, IReadOnl
   public bool IsSuccess => Fault is null && FailedMessageIds.Count == 0 && MovedCount == RequestedCount;
 }
 
+public sealed record ArchiveFolderEnsureResult(bool IsSuccess, MailFolder? Folder, string Message, IReadOnlyList<string> CreatedPaths);
+
 public enum ArchiveOperationMode
 {
   Analysis,

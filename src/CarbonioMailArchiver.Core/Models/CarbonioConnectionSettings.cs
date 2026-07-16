@@ -7,6 +7,7 @@ public sealed class CarbonioConnectionSettings
   public string Email { get; set; } = string.Empty;
   public string LastSourceFolderId { get; set; } = string.Empty;
   public string LastDestinationFolderId { get; set; } = string.Empty;
+  public bool UseArchiveDestination { get; set; }
   public bool RememberCredentials { get; set; }
   public bool AcceptUntrustedCertificates { get; set; }
   public bool DiagnosticSoapLoggingEnabled { get; set; }

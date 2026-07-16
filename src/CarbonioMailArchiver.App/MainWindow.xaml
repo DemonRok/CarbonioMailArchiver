@@ -75,16 +75,23 @@
                                       HorizontalAlignment="Left"
                                       Margin="0,0,0,12" />
 
-                            <TextBlock Grid.Row="7" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <ComboBox Grid.Row="7" Grid.Column="1"
+                            <CheckBox Grid.Row="7"
+                                      Grid.Column="1"
+                                      Content="Usa Archivio come destinazione e crea il percorso sotto /Archive"
+                                      IsChecked="{Binding UseArchiveDestination}"
+                                      Margin="0,0,0,10" />
+
+                            <TextBlock Grid.Row="8" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <ComboBox Grid.Row="8" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
                                       SelectedItem="{Binding SelectedDestinationFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       DisplayMemberPath="DisplayName"
+                                      IsEnabled="{Binding IsDestinationFolderSelectionEnabled}"
                                       MinWidth="340"
                                       HorizontalAlignment="Left"
                                       Margin="0,0,0,12" />
 
-                            <WrapPanel Grid.Row="8" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
+                            <WrapPanel Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
                                 <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,8" />
                                 <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,8" />
                                 <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,8" />

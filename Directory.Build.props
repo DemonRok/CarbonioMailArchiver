@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <BuildVersion>1.2.5</BuildVersion>
+    <BuildVersion>1.3.0</BuildVersion>
     <Version>$(BuildVersion)</Version>
     <AssemblyVersion>$(BuildVersion).0</AssemblyVersion>
     <FileVersion>$(BuildVersion).0</FileVersion>

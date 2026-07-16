@@ -102,6 +102,22 @@ internal sealed class CarbonioWebClient : IDisposable
     return PostSoapJsonAsync("GetFolderRequest", payload, cancellationToken);
   }
 
+  public Task<HttpResponseMessage> PostCreateFolderAsync(string parentFolderId, string folderName, CancellationToken cancellationToken)
+  {
+    var request = new
+    {
+      _jsns = "urn:zimbraMail",
+      folder = new
+      {
+        name = folderName,
+        l = parentFolderId,
+        view = "message"
+      }
+    };
+    var payload = BuildSoapPayload("CreateFolderRequest", request);
+    return PostSoapJsonAsync("CreateFolderRequest", payload, cancellationToken);
+  }
+
   public Task<HttpResponseMessage> PostSearchAsync(string query, int limit, int offset, CancellationToken cancellationToken)
   {
     var request = new

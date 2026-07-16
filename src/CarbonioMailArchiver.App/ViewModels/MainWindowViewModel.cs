@@ -10,6 +10,7 @@ using System.Windows.Input;
 using CarbonioMailArchiver.Core.Abstractions;
 using CarbonioMailArchiver.Core.Models;
 using CarbonioMailArchiver.Infrastructure.Configuration;
+using CarbonioMailArchiver.Infrastructure.Services;
 using Microsoft.Extensions.Logging;
 
 namespace CarbonioMailArchiver.App.ViewModels;
@@ -22,6 +23,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly IConnectionDiagnosticService _connectionDiagnosticService;
   private readonly ISearchDiagnosticService _searchDiagnosticService;
   private readonly IFolderDiagnosticService _folderDiagnosticService;
+  private readonly IArchiveFolderService _archiveFolderService;
   private readonly IMoveDiagnosticService _moveDiagnosticService;
   private readonly IOperationReportService _operationReportService;
   private readonly ILogger<MainWindowViewModel> _logger;
@@ -40,6 +42,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
   private bool _autoLoadFoldersOnStartup;
+  private bool _useArchiveDestination;
   private bool _promptReportExportAfterMove = true;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
@@ -69,6 +72,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IConnectionDiagnosticService connectionDiagnosticService,
     ISearchDiagnosticService searchDiagnosticService,
     IFolderDiagnosticService folderDiagnosticService,
+    IArchiveFolderService archiveFolderService,
     IMoveDiagnosticService moveDiagnosticService,
     IOperationReportService operationReportService,
     ILogger<MainWindowViewModel> logger)
@@ -79,6 +83,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _connectionDiagnosticService = connectionDiagnosticService;
     _searchDiagnosticService = searchDiagnosticService;
     _folderDiagnosticService = folderDiagnosticService;
+    _archiveFolderService = archiveFolderService;
     _moveDiagnosticService = moveDiagnosticService;
     _operationReportService = operationReportService;
     _logger = logger;
@@ -231,6 +236,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
+  public bool UseArchiveDestination
+  {
+    get => _useArchiveDestination;
+    set
+    {
+      if (EqualityComparer<bool>.Default.Equals(_useArchiveDestination, value))
+      {
+        return;
+      }
+
+      _useArchiveDestination = value;
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UseArchiveDestination)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDestinationFolderSelectionEnabled)));
+    }
+  }
+
+  public bool IsDestinationFolderSelectionEnabled => !UseArchiveDestination;
+
   public bool RememberCredentials
   {
     get => _rememberCredentials;
@@ -354,6 +377,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     RememberCredentials = settings.RememberCredentials;
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
     AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
+    UseArchiveDestination = settings.UseArchiveDestination;
     PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
     TimeoutSeconds = settings.TimeoutSeconds;
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
@@ -386,7 +410,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     _logger.LogInformation("Configurazione locale salvata per {Account}.", settings.Email);
-    StatusMessage = $"Configurazione salvata. Cartelle: sorgente {settings.LastSourceFolderId}, destinazione {settings.LastDestinationFolderId}. Le password non sono scritte nel JSON.";
+    var destinationMode = settings.UseArchiveDestination ? "Archivio automatico" : settings.LastDestinationFolderId;
+    StatusMessage = $"Configurazione salvata. Cartelle: sorgente {settings.LastSourceFolderId}, destinazione {destinationMode}. Le password non sono scritte nel JSON.";
     await RefreshLogsAsync();
   }
 
@@ -514,7 +539,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var sourceFolder = SelectedSourceFolder!;
-    var destinationFolder = SelectedDestinationFolder!;
+    var destinationFolder = GetPlannedDestinationFolder(sourceFolder);
     await SaveSettingsSnapshotAsync();
     _logger.LogInformation(
       "Simulazione spostamento: {Count} messaggi da {SourceFolder} ({SourceId}) a {DestinationFolder} ({DestinationId}).",
@@ -524,7 +549,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       destinationFolder.AbsolutePath,
       destinationFolder.Id);
 
-    StatusMessage = $"Simulazione: {PreviewMessages.Count} messaggi verrebbero spostati da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}. Nessuna modifica eseguita.";
+    var archiveNote = UseArchiveDestination ? " Le cartelle mancanti sotto /Archive verrebbero create durante lo spostamento reale." : string.Empty;
+    StatusMessage = $"Simulazione: {PreviewMessages.Count} messaggi verrebbero spostati da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}.{archiveNote} Nessuna modifica eseguita.";
     await RefreshLogsAsync();
   }
 
@@ -538,7 +564,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var sourceFolder = SelectedSourceFolder!;
-    var destinationFolder = SelectedDestinationFolder!;
+    var destinationFolder = GetPlannedDestinationFolder(sourceFolder);
     var confirmation = MessageBox.Show(
       $"Spostare realmente {PreviewMessages.Count} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?",
       "Conferma spostamento",
@@ -561,6 +587,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var password = await GetPasswordAsync(settings);
     await SaveSettingsSnapshotAsync();
+    var destinationResolve = await ResolveMoveDestinationAsync(settings, password, sourceFolder, CancellationToken.None);
+    if (!destinationResolve.IsSuccess || destinationResolve.Folder is null)
+    {
+      StatusMessage = destinationResolve.Message;
+      await RefreshLogsAsync();
+      return;
+    }
+
+    destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
     var messageIds = PreviewMessages.Select(message => message.Id).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToArray();
     StatusMessage = "Spostamento reale in corso...";
     var result = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIds, destinationFolder.Id, CancellationToken.None);
@@ -605,7 +640,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var sourceFolder = SelectedSourceFolder!;
-    var destinationFolder = SelectedDestinationFolder!;
+    var destinationFolder = GetPlannedDestinationFolder(sourceFolder);
     await SaveSettingsSnapshotAsync();
     var batchSize = Math.Clamp(BatchSize, 10, 100);
     var maxMessagesToMove = Math.Max(MaxMessagesToMove, 0);
@@ -681,6 +716,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var operationStartedAt = DateTimeOffset.Now;
+    var destinationResolve = await ResolveMoveDestinationAsync(settings, password, sourceFolder, moveCancellation.Token);
+    if (!destinationResolve.IsSuccess || destinationResolve.Folder is null)
+    {
+      StatusMessage = destinationResolve.Message;
+      await RefreshLogsAsync();
+      ResetMoveProgress();
+      return;
+    }
+
+    destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
+    if (destinationResolve.CreatedPaths.Count > 0)
+    {
+      StatusMessage = $"{destinationResolve.Message} Avvio spostamento...";
+    }
+
     var reportRows = scanResult.MessageIds
       .Select(id => new MoveOperationReportRow(id, "Da spostare", null))
       .ToList();
@@ -977,6 +1027,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     BatchSize = 50;
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
+    UseArchiveDestination = false;
     DiagnosticSoapLoggingEnabled = false;
     PromptReportExportAfterMove = true;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
@@ -1040,6 +1091,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       Email = Email.Trim(),
       LastSourceFolderId = SelectedSourceFolder?.Id ?? _lastSourceFolderId,
       LastDestinationFolderId = SelectedDestinationFolder?.Id ?? _lastDestinationFolderId,
+      UseArchiveDestination = UseArchiveDestination,
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
@@ -1180,6 +1232,57 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveDetailText = MoveProgressText;
   }
 
+  private FolderSelectionViewModel GetPlannedDestinationFolder(FolderSelectionViewModel sourceFolder)
+  {
+    if (!UseArchiveDestination)
+    {
+      return SelectedDestinationFolder!;
+    }
+
+    var archivePath = CarbonioArchiveFolderService.BuildArchivePath(sourceFolder.AbsolutePath);
+    return new FolderSelectionViewModel(new MailFolder
+    {
+      Id = "Archive",
+      Name = Path.GetFileName(archivePath),
+      AbsolutePath = archivePath
+    });
+  }
+
+  private async Task<ArchiveFolderEnsureResult> ResolveMoveDestinationAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    FolderSelectionViewModel sourceFolder,
+    CancellationToken cancellationToken)
+  {
+    if (!UseArchiveDestination)
+    {
+      return new ArchiveFolderEnsureResult(true, ToMailFolder(SelectedDestinationFolder!), "Destinazione selezionata pronta.", []);
+    }
+
+    MoveBatchText = "Preparazione Archivio";
+    MoveDetailText = "Verifica e creazione cartelle mancanti sotto /Archive...";
+    MoveProgressText = MoveDetailText;
+    IsMoveProgressIndeterminate = true;
+    try
+    {
+      return await _archiveFolderService.EnsureArchiveDestinationAsync(settings, password, ToMailFolder(sourceFolder), cancellationToken);
+    }
+    finally
+    {
+      IsMoveProgressIndeterminate = false;
+    }
+  }
+
+  private static MailFolder ToMailFolder(FolderSelectionViewModel folder)
+  {
+    return new MailFolder
+    {
+      Id = folder.Id,
+      Name = folder.Name,
+      AbsolutePath = folder.AbsolutePath
+    };
+  }
+
   private string? ValidateMovePreview()
   {
     if (PreviewMessages.Count == 0)
@@ -1195,6 +1298,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     if (SelectedSourceFolder is null)
     {
       return "Seleziona una cartella sorgente.";
+    }
+
+    if (UseArchiveDestination)
+    {
+      if (SelectedSourceFolder.AbsolutePath.StartsWith("/Archive/", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(SelectedSourceFolder.AbsolutePath, "/Archive", StringComparison.OrdinalIgnoreCase))
+      {
+        return "La sorgente e' gia' dentro /Archive.";
+      }
+
+      return null;
     }
 
     if (SelectedDestinationFolder is null)

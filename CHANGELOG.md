@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.3.0] - In preparazione
+
+- Aggiunta destinazione automatica in Archivio con creazione del percorso `/Archive/...` coerente con la sorgente.
+
 ## [1.2.5] - In preparazione
 
 - Corrette le date di rilascio nel changelog per le versioni gia' pubblicate.
