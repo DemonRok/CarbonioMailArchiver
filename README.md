@@ -2,6 +2,8 @@
 
 Applicazione desktop Windows in C# e WPF per analizzare e spostare in massa email presenti in una casella Carbonio usando API HTTP/SOAP lato server, senza IMAP, POP3 o EAS.
 
+Licenza: MIT. Autore: Mauro Bettinelli.
+
 ## Stato
 
 Base applicativa completata:
