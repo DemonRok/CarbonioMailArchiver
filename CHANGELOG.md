@@ -2,19 +2,23 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
-## [1.2.4] - In preparazione
+## [1.2.5] - In preparazione
+
+- Corrette le date di rilascio nel changelog per le versioni gia' pubblicate.
+
+## [1.2.4] - 2026-07-16
 
 - Aggiunta indicazione visiva con barra indeterminata durante il caricamento cartelle.
 
-## [1.2.3] - In preparazione
+## [1.2.3] - 2026-07-16
 
 - Reso esplicito il salvataggio della selezione sorgente/destinazione nel JSON di configurazione.
 
-## [1.2.2] - In preparazione
+## [1.2.2] - 2026-07-16
 
 - Corretto il salvataggio di sorgente/destinazione dopo il caricamento cartelle.
 
-## [1.2.1] - In preparazione
+## [1.2.1] - 2026-07-16
 
 - Salvata e ripristinata l'ultima coppia di cartelle sorgente/destinazione selezionata.
 - Migliorata la validazione dei campi numerici bloccando testo non numerico e incolla non valido.
