@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -47,6 +48,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
+  private static readonly string CurrentVersion =
+    typeof(MainWindowViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
+    ?? "dev";
 
   public MainWindowViewModel(
     AppConfiguration configuration,
@@ -104,6 +108,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public string LogDirectory { get; }
+  public string WindowTitle => $"Carbonio Mail Archiver {CurrentVersion}";
 
   public string BaseUrl
   {

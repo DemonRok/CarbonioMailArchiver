@@ -95,6 +95,14 @@ La dimensione batch controlla quante email vengono inviate in una singola richie
 dotnet build CarbonioMailArchiver.slnx
 ```
 
+## Versione
+
+La versione corrente e' centralizzata in `Directory.Build.props`, proprieta' `BuildVersion`.
+
+Versione iniziale: `1.0.21`.
+
+Prima di ogni commit destinato a una nuova build, aggiornare `BuildVersion`. La stessa versione viene applicata agli assembly e mostrata nel titolo della finestra.
+
 ## Test
 
 ```bat
@@ -108,6 +116,12 @@ dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c R
 ```
 
 La build Release non genera PDB. L'eseguibile pubblicato si trova in `artifacts\release\CarbonioMailArchiver\CarbonioMailArchiver.App.exe`.
+
+## Release GitHub
+
+Il workflow `.github/workflows/release.yml` compila, esegue i test, pubblica la versione Release win-x64 self-contained senza PDB e genera uno ZIP.
+
+Quando verra' creato un tag `v*`, il workflow aprira' una draft release GitHub con lo ZIP allegato. I tag e la pubblicazione finale della release restano manuali.
 
 ## Sicurezza
 

@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Carbonio Mail Archiver" Height="620" MinHeight="560" Width="920" MinWidth="780">
+        Title="{Binding WindowTitle}" Height="845" MinHeight="560" Width="1110" MinWidth="780">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -19,6 +19,7 @@
 
         <TabControl Grid.Row="1">
             <TabItem Header="Connessione">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <Grid Margin="0,18,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="180" />
@@ -87,15 +88,15 @@
                               HorizontalAlignment="Left"
                               Margin="0,0,0,12" />
 
-                    <StackPanel Grid.Row="12" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,8,0,12">
-                        <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,0" />
-                        <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,0" />
-                        <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,0" />
-                        <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,0" />
-                        <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,0" />
-                        <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" Margin="0,0,8,0" />
-                        <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="110" />
-                    </StackPanel>
+                    <WrapPanel Grid.Row="12" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,12">
+                        <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,8" />
+                        <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,8" />
+                        <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,8" />
+                        <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,8" />
+                        <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,8" />
+                        <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" Margin="0,0,8,8" />
+                        <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="110" Margin="0,0,8,8" />
+                    </WrapPanel>
 
                     <Grid Grid.Row="13" Grid.ColumnSpan="2" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -147,6 +148,7 @@
                               CanUserDeleteRows="False"
                               SelectionMode="Extended"
                               SelectionUnit="FullRow"
+                              MinHeight="260"
                               Margin="0,10,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Data" Binding="{Binding Date}" Width="150" />
@@ -159,6 +161,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem Header="Log">

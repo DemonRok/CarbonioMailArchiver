@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore CarbonioMailArchiver.slnx
+
+      - name: Test
+        run: dotnet test CarbonioMailArchiver.slnx -c Release --no-restore
+
+      - name: Publish
+        run: dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o artifacts\release\CarbonioMailArchiver
+
+      - name: Package
+        run: Compress-Archive -Path artifacts\release\CarbonioMailArchiver\* -DestinationPath artifacts\CarbonioMailArchiver-${{ github.ref_name }}-win-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: CarbonioMailArchiver-${{ github.ref_name }}-win-x64
+          path: artifacts\CarbonioMailArchiver-${{ github.ref_name }}-win-x64.zip
+
+      - name: Create GitHub draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: artifacts\CarbonioMailArchiver-${{ github.ref_name }}-win-x64.zip
