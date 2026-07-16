@@ -22,9 +22,10 @@ Funzioni operative disponibili:
 - test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
 - test ricerca in sola lettura con `SearchRequest`, preview a 10 messaggi;
 - caricamento cartelle e selezione sorgente/destinazione in UI;
+- caricamento automatico cartelle all'avvio dopo un primo caricamento riuscito;
 - conteggio effettivo dei messaggi con ricerca paginata;
 - spostamento reale della preview;
-- spostamento reale dei risultati selezionati a batch;
+- spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata;
 - limite opzionale del numero di email da spostare (`0` = tutte);
 - progress bar, annullamento cooperativo e log operazione;
 - report CSV automatico in `%LocalAppData%\CarbonioMailArchiver\Reports`.
@@ -42,7 +43,7 @@ tests/
 
 ## Compatibilita Carbonio
 
-Gli endpoint SOAP possono variare tra installazioni Carbonio e tra provider. L'applicazione deve sempre eseguire prima il test di connessione e deve permettere la configurazione manuale dell'URL SOAP. L'abilitazione della voce CLI nella Admin UI non implica accesso SSH o disponibilita di comandi server-side.
+Gli endpoint SOAP possono variare tra installazioni Carbonio e tra provider. L'applicazione permette la configurazione manuale dell'URL SOAP e deve sempre eseguire un test di connessione prima degli spostamenti operativi.
 
 Chiamate SOAP/API verificate o in uso:
 
@@ -56,23 +57,15 @@ Chiamate SOAP/API verificate o in uso:
 Da verificare/implementare:
 
 - `FolderActionRequest` o chiamata equivalente per creare cartelle da app;
-- export report piu' ricco con metadati completi dei messaggi;
-- packaging Release e distribuzione.
-
-Endpoint da verificare nelle fasi successive:
-
-- `https://host/service/soap`;
-- endpoint equivalenti usati dalla WebUI Carbonio;
-- eventuali path diversi pubblicati da reverse proxy o tenant.
+- report piu' ricco con metadati completi dei messaggi.
 
 Informazioni reali utili dal server:
 
 - URL pubblico esatto della WebUI e dell'endpoint SOAP;
 - versione Carbonio e compatibilita delle API SOAP abilitate;
-- formato account richiesto per login, dominio e tenant;
 - eventuale 2FA, SSO, proxy, rate limit o restrizioni IP;
 - comportamento TLS/certificato: i certificati non attendibili restano bloccati;
-- permessi dell'utente per leggere Inbox, creare sottocartelle e spostare messaggi;
+- permessi dell'utente per leggere cartelle e spostare messaggi;
 - dimensione mailbox, volume stimato dei messaggi vecchi e limiti batch accettabili.
 
 ## Rischi tecnici
@@ -93,6 +86,8 @@ Ogni spostamento batch genera un CSV in `%LocalAppData%\CarbonioMailArchiver\Rep
 - batch size e limite richiesto;
 - esito finale;
 - riga per ogni messaggio selezionato, con stato `Spostato`, `Errore` o `Non spostato`.
+
+La dimensione batch controlla quante email vengono inviate in una singola richiesta di spostamento. Il valore predefinito e' 50. Il limite email e' separato: ad esempio, con limite 1001 e batch 50, l'app esegue 20 batch da 50 messaggi e un batch finale da 1 messaggio.
 
 ## Build
 

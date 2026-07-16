@@ -33,6 +33,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private FolderSelectionViewModel? _selectedDestinationFolder;
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
+  private bool _autoLoadFoldersOnStartup;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _batchSize = 50;
@@ -238,6 +239,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public async Task InitializeAsync()
   {
     await LoadAsync();
+    if (_autoLoadFoldersOnStartup && !string.IsNullOrEmpty(Password) && ValidateConnectionFields(ToSettings()) is null)
+    {
+      await LoadFoldersAsync();
+    }
+
     await RefreshLogsAsync();
   }
 
@@ -249,6 +255,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     Email = settings.Email;
     RememberCredentials = settings.RememberCredentials;
     DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
+    _autoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
     TimeoutSeconds = settings.TimeoutSeconds;
     Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
     StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
@@ -321,6 +328,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
+
+    if (AvailableFolders.Count > 0)
+    {
+      var updatedSettings = ToSettings();
+      updatedSettings.AutoLoadFoldersOnStartup = true;
+      await _configuration.SaveConnectionSettingsAsync(updatedSettings, CancellationToken.None);
+      _autoLoadFoldersOnStartup = true;
+    }
+
     await RefreshLogsAsync();
   }
 
@@ -767,6 +783,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
+      AutoLoadFoldersOnStartup = _autoLoadFoldersOnStartup,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600)
     };
   }

@@ -8,5 +8,6 @@ public sealed class CarbonioConnectionSettings
   public bool RememberCredentials { get; set; }
   public bool AcceptUntrustedCertificates { get; set; }
   public bool DiagnosticSoapLoggingEnabled { get; set; }
+  public bool AutoLoadFoldersOnStartup { get; set; }
   public int TimeoutSeconds { get; set; } = 100;
 }
