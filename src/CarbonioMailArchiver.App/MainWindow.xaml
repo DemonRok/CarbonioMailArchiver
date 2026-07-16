@@ -69,7 +69,7 @@
                             <TextBlock Grid.Row="6" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <ComboBox Grid.Row="6" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
-                                      SelectedItem="{Binding SelectedSourceFolder}"
+                                      SelectedItem="{Binding SelectedSourceFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       DisplayMemberPath="DisplayName"
                                       MinWidth="340"
                                       HorizontalAlignment="Left"
@@ -78,7 +78,7 @@
                             <TextBlock Grid.Row="7" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <ComboBox Grid.Row="7" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
-                                      SelectedItem="{Binding SelectedDestinationFolder}"
+                                      SelectedItem="{Binding SelectedDestinationFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       DisplayMemberPath="DisplayName"
                                       MinWidth="340"
                                       HorizontalAlignment="Left"

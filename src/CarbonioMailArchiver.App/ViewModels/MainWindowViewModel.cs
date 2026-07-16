@@ -386,7 +386,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     _logger.LogInformation("Configurazione locale salvata per {Account}.", settings.Email);
-    StatusMessage = "Configurazione salvata. Le password non sono scritte nel JSON.";
+    StatusMessage = $"Configurazione salvata. Cartelle: sorgente {settings.LastSourceFolderId}, destinazione {settings.LastDestinationFolderId}. Le password non sono scritte nel JSON.";
     await RefreshLogsAsync();
   }
 

@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.2.3] - In preparazione
+
+- Reso esplicito il salvataggio della selezione sorgente/destinazione nel JSON di configurazione.
+
 ## [1.2.2] - In preparazione
 
 - Corretto il salvataggio di sorgente/destinazione dopo il caricamento cartelle.

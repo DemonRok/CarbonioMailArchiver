@@ -15,6 +15,8 @@ public sealed class AppConfigurationTests
       BaseUrl = "https://mail.example.test",
       SoapUrl = "https://mail.example.test/service/soap",
       Email = "user@example.test",
+      LastSourceFolderId = "2",
+      LastDestinationFolderId = "23747",
       RememberCredentials = true
     };
 
@@ -23,5 +25,7 @@ public sealed class AppConfigurationTests
     var json = await File.ReadAllTextAsync(Path.Combine(directory, "settings.json"));
     Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);
     Assert.Contains("user@example.test", json, StringComparison.Ordinal);
+    Assert.Contains("\"LastSourceFolderId\": \"2\"", json, StringComparison.Ordinal);
+    Assert.Contains("\"LastDestinationFolderId\": \"23747\"", json, StringComparison.Ordinal);
   }
 }
