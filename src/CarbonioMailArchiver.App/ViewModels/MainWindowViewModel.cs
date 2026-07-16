@@ -20,6 +20,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly ISearchDiagnosticService _searchDiagnosticService;
   private readonly IFolderDiagnosticService _folderDiagnosticService;
   private readonly IMoveDiagnosticService _moveDiagnosticService;
+  private readonly IOperationReportService _operationReportService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
@@ -54,6 +55,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     ISearchDiagnosticService searchDiagnosticService,
     IFolderDiagnosticService folderDiagnosticService,
     IMoveDiagnosticService moveDiagnosticService,
+    IOperationReportService operationReportService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
@@ -63,6 +65,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _searchDiagnosticService = searchDiagnosticService;
     _folderDiagnosticService = folderDiagnosticService;
     _moveDiagnosticService = moveDiagnosticService;
+    _operationReportService = operationReportService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
@@ -532,10 +535,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    var operationStartedAt = DateTimeOffset.Now;
+    var reportRows = scanResult.MessageIds
+      .Select(id => new MoveOperationReportRow(id, "Da spostare", null))
+      .ToList();
+
     try
     {
       var movedCount = 0;
       var batchNumber = 0;
+      var reportOffset = 0;
 
       foreach (var messageIdBatch in scanResult.MessageIds.Chunk(batchSize))
       {
@@ -546,9 +555,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
         if (!moveResult.IsSuccess)
         {
+          foreach (var failedId in messageIdBatch)
+          {
+            reportRows[reportOffset++] = new MoveOperationReportRow(failedId, "Errore", moveResult.Fault?.Reason);
+          }
+
+          var errorReportPath = await SaveMoveReportAsync(
+            operationStartedAt,
+            settings.Email,
+            sourceFolder,
+            destinationFolder,
+            beforeDate,
+            batchSize,
+            maxMessagesToMove,
+            reportRows,
+            "Interrotto per errore",
+            CancellationToken.None);
           StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
+          StatusMessage += $" Report: {errorReportPath}";
           await RefreshLogsAsync();
           return;
+        }
+
+        foreach (var movedId in messageIdBatch)
+        {
+          reportRows[reportOffset++] = new MoveOperationReportRow(movedId, "Spostato", null);
         }
 
         var previousMovedCount = movedCount;
@@ -563,12 +594,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
       PreviewMessages.Clear();
       UpdateMoveProgress(movedCount, movedCount, "Spostamento completato", $"{movedCount} messaggi spostati.");
-      StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.";
+      var successReportPath = await SaveMoveReportAsync(
+        operationStartedAt,
+        settings.Email,
+        sourceFolder,
+        destinationFolder,
+        beforeDate,
+        batchSize,
+        maxMessagesToMove,
+        reportRows,
+        "Completato",
+        CancellationToken.None);
+      StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}. Report: {successReportPath}";
       await RefreshLogsAsync();
     }
     catch (OperationCanceledException)
     {
+      var reportPath = await SaveMoveReportAsync(
+        operationStartedAt,
+        settings.Email,
+        sourceFolder,
+        destinationFolder,
+        beforeDate,
+        batchSize,
+        maxMessagesToMove,
+        reportRows.Select(row => row.Status == "Da spostare" ? row with { Status = "Non spostato", Detail = "Operazione annullata" } : row).ToList(),
+        "Annullato",
+        CancellationToken.None);
       StatusMessage = "Spostamento annullato dall'utente. L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
+      StatusMessage += $" Report: {reportPath}";
       MoveProgressText = "Spostamento annullato.";
       MoveBatchText = "Spostamento annullato";
       MoveDetailText = "L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
@@ -642,6 +696,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
       offset += batchSize;
     }
+  }
+
+  private Task<string> SaveMoveReportAsync(
+    DateTimeOffset startedAt,
+    string account,
+    FolderSelectionViewModel sourceFolder,
+    FolderSelectionViewModel destinationFolder,
+    DateOnly beforeDate,
+    int batchSize,
+    int requestedLimit,
+    IReadOnlyList<MoveOperationReportRow> rows,
+    string result,
+    CancellationToken cancellationToken)
+  {
+    var report = new MoveOperationReport(
+      startedAt,
+      DateTimeOffset.Now,
+      account,
+      sourceFolder.AbsolutePath,
+      sourceFolder.Id,
+      destinationFolder.AbsolutePath,
+      destinationFolder.Id,
+      beforeDate,
+      batchSize,
+      requestedLimit,
+      rows,
+      result);
+    return _operationReportService.ExportMoveReportAsync(report, cancellationToken);
   }
 
   private async Task RefreshLogsAsync()

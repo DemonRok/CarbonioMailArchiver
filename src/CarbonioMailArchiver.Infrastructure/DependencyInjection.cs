@@ -14,6 +14,7 @@ public static class DependencyInjection
     services.AddSingleton<AppConfiguration>();
     services.AddSingleton<ICredentialStore, DpapiCredentialStore>();
     services.AddSingleton<IOperationLogService, OperationLogService>();
+    services.AddSingleton<IOperationReportService, OperationReportService>();
     services.AddSingleton<IAuthenticationService, PhaseBPendingAuthenticationService>();
     services.AddSingleton<ICarbonioSoapClient, PhaseBPendingCarbonioSoapClient>();
     services.AddSingleton<IConnectionDiagnosticService, CarbonioConnectionDiagnosticService>();

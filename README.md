@@ -4,7 +4,7 @@ Applicazione desktop Windows in C# e WPF per analizzare e spostare in massa emai
 
 ## Stato
 
-Fase A completata:
+Base applicativa completata:
 
 - solution e progetti separati;
 - base WPF con pattern MVVM;
@@ -15,15 +15,19 @@ Fase A completata:
 - modelli e interfacce principali del dominio;
 - test unitario iniziale per la costruzione query.
 
-Fase B diagnostica avviata:
+Funzioni operative disponibili:
 
 - login reale tramite `POST /zx/auth/v2/login`;
 - cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
 - test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- test ricerca in sola lettura con `SearchRequest`, limite 10 messaggi;
+- test ricerca in sola lettura con `SearchRequest`, preview a 10 messaggi;
 - caricamento cartelle e selezione sorgente/destinazione in UI;
-- pulsanti UI "Test connessione" e "Test ricerca";
-- nessuno spostamento email ancora implementato.
+- conteggio effettivo dei messaggi con ricerca paginata;
+- spostamento reale della preview;
+- spostamento reale dei risultati selezionati a batch;
+- limite opzionale del numero di email da spostare (`0` = tutte);
+- progress bar, annullamento cooperativo e log operazione;
+- report CSV automatico in `%LocalAppData%\CarbonioMailArchiver\Reports`.
 
 ## Struttura
 
@@ -40,15 +44,20 @@ tests/
 
 Gli endpoint SOAP possono variare tra installazioni Carbonio e tra provider. L'applicazione deve sempre eseguire prima il test di connessione e deve permettere la configurazione manuale dell'URL SOAP. L'abilitazione della voce CLI nella Admin UI non implica accesso SSH o disponibilita di comandi server-side.
 
-Chiamate SOAP/API verificate o da verificare in Fase B:
+Chiamate SOAP/API verificate o in uso:
 
 - `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
 - `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
 - `SearchRequest` diagnostica con query equivalente a `in:inbox before:dd/MM/yyyy`;
 - `SearchRequest` su cartella scelta con query equivalente a `inid:<folderId> before:dd/MM/yyyy`;
-- `FolderActionRequest` o chiamata equivalente per creare la cartella archivio sotto Inbox;
 - `MsgActionRequest` con azione `move` verso la cartella destinazione;
 - `GetFolderRequest` per leggere ID, permessi e struttura cartelle.
+
+Da verificare/implementare:
+
+- `FolderActionRequest` o chiamata equivalente per creare cartelle da app;
+- export report piu' ricco con metadati completi dei messaggi;
+- packaging Release e distribuzione.
 
 Endpoint da verificare nelle fasi successive:
 
@@ -56,7 +65,7 @@ Endpoint da verificare nelle fasi successive:
 - endpoint equivalenti usati dalla WebUI Carbonio;
 - eventuali path diversi pubblicati da reverse proxy o tenant.
 
-Informazioni reali necessarie dal server prima della Fase B:
+Informazioni reali utili dal server:
 
 - URL pubblico esatto della WebUI e dell'endpoint SOAP;
 - versione Carbonio e compatibilita delle API SOAP abilitate;
@@ -74,9 +83,16 @@ Informazioni reali necessarie dal server prima della Fase B:
 - batch troppo grandi possono causare timeout, fault SOAP o limiti lato server;
 - log diagnostici SOAP vanno filtrati per non registrare token o dati sensibili.
 
-## Fase B non inclusa
+## Report operazione
 
-La diagnostica Fase B implementa login, `NoOpRequest` e `SearchRequest` in sola lettura con limite basso. Non implementa ancora creazione cartelle, spostamento messaggi o export CSV operativo. I servizi relativi restano registrati come placeholder espliciti.
+Ogni spostamento batch genera un CSV in `%LocalAppData%\CarbonioMailArchiver\Reports` con:
+
+- account;
+- cartella sorgente e destinazione;
+- data limite;
+- batch size e limite richiesto;
+- esito finale;
+- riga per ogni messaggio selezionato, con stato `Spostato`, `Errore` o `Non spostato`.
 
 ## Build
 
@@ -93,8 +109,10 @@ dotnet test CarbonioMailArchiver.slnx
 ## Pubblicazione prevista
 
 ```bat
-dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o artifacts\release\CarbonioMailArchiver
 ```
+
+La build Release non genera PDB. L'eseguibile pubblicato si trova in `artifacts\release\CarbonioMailArchiver\CarbonioMailArchiver.App.exe`.
 
 ## Sicurezza
 

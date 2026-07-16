@@ -14,7 +14,7 @@
 
         <StackPanel>
             <TextBlock Text="Carbonio Mail Archiver" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Fase A: configurazione locale, credenziali protette, logging e base MVVM/DI." Foreground="#555" Margin="0,4,0,18" />
+            <TextBlock Text="Operativo: ricerca, conteggio e spostamento email Carbonio via API server, con log e report CSV." Foreground="#555" Margin="0,4,0,18" />
         </StackPanel>
 
         <TabControl Grid.Row="1">

@@ -58,4 +58,20 @@ public sealed record ArchiveOperationProgress(int InitialCount, int ProcessedCou
 
 public sealed record ArchiveOperationResult(bool IsSuccess, int InitialCount, int MovedCount, int ErrorCount, string Message);
 
+public sealed record MoveOperationReport(
+  DateTimeOffset StartedAt,
+  DateTimeOffset FinishedAt,
+  string Account,
+  string SourceFolder,
+  string SourceFolderId,
+  string DestinationFolder,
+  string DestinationFolderId,
+  DateOnly BeforeDate,
+  int BatchSize,
+  int RequestedLimit,
+  IReadOnlyList<MoveOperationReportRow> Rows,
+  string Result);
+
+public sealed record MoveOperationReportRow(string MessageId, string Status, string? Detail);
+
 public sealed record SoapFaultInfo(string Code, string Reason, string? Detail);

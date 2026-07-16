@@ -64,6 +64,12 @@ public interface IOperationLogService
   string LogDirectory { get; }
 }
 
+public interface IOperationReportService
+{
+  Task<string> ExportMoveReportAsync(MoveOperationReport report, CancellationToken cancellationToken);
+  string ReportDirectory { get; }
+}
+
 public interface ICsvExportService
 {
   Task ExportPreviewAsync(string path, IEnumerable<MailMessageSummary> messages, CancellationToken cancellationToken);
