@@ -28,7 +28,7 @@ public sealed class CarbonioFolderMaintenanceService(ILogger<CarbonioFolderMaint
     return BuildDeletePlan(folders, folderId, includeSubfolders);
   }
 
-  public async Task<FolderDeleteResult> DeleteEmptyFoldersAsync(
+  public async Task<FolderDeleteResult> TrashEmptyFoldersAsync(
     CarbonioConnectionSettings settings,
     string password,
     string folderId,
@@ -49,29 +49,29 @@ public sealed class CarbonioFolderMaintenanceService(ILogger<CarbonioFolderMaint
       .ThenByDescending(folder => folder.AbsolutePath.Length)
       .ToArray();
 
-    var deletedCount = 0;
+    var trashedCount = 0;
     foreach (var folder in candidatesByPath)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      var response = await client.PostDeleteFolderAsync(folder.Id, cancellationToken);
+      var response = await client.PostTrashFolderAsync(folder.Id, cancellationToken);
       var content = await response.Content.ReadAsStringAsync(cancellationToken);
       if (!response.IsSuccessStatusCode || IsSoapFault(content))
       {
         var sanitized = CarbonioConnectionDiagnosticService.SanitizeDiagnosticResponse(content);
         logger.LogWarning(
-          "Eliminazione cartella vuota fallita per {Account}. Cartella: {Folder}. Status: {StatusCode}. Risposta: {Response}",
+          "Spostamento nel cestino della cartella vuota fallito per {Account}. Cartella: {Folder}. Status: {StatusCode}. Risposta: {Response}",
           settings.Email,
           folder.AbsolutePath,
           response.StatusCode,
           sanitized);
-        return new FolderDeleteResult(false, $"Eliminazione interrotta su {folder.AbsolutePath}. Cartelle eliminate: {deletedCount}.", deletedCount);
+        return new FolderDeleteResult(false, $"Spostamento nel cestino interrotto su {folder.AbsolutePath}. Cartelle spostate: {trashedCount}.", trashedCount);
       }
 
-      deletedCount++;
-      logger.LogInformation("Cartella vuota eliminata per {Account}: {Folder}.", settings.Email, folder.AbsolutePath);
+      trashedCount++;
+      logger.LogInformation("Cartella vuota spostata nel cestino per {Account}: {Folder}.", settings.Email, folder.AbsolutePath);
     }
 
-    return new FolderDeleteResult(true, $"Cartelle vuote eliminate: {deletedCount}.", deletedCount);
+    return new FolderDeleteResult(true, $"Cartelle vuote spostate nel cestino: {trashedCount}.", trashedCount);
   }
 
   private static FolderDeletePlanResult BuildDeletePlan(IReadOnlyDictionary<string, MailFolder> folders, string folderId, bool includeSubfolders)
@@ -94,13 +94,13 @@ public sealed class CarbonioFolderMaintenanceService(ILogger<CarbonioFolderMaint
     if (candidates.Count == 0)
     {
       var scope = includeSubfolders ? $"sotto {rootFolder.AbsolutePath}" : rootFolder.AbsolutePath;
-      return new FolderDeletePlanResult(false, $"Nessuna cartella vuota eliminabile: {scope}.", []);
+      return new FolderDeletePlanResult(false, $"Nessuna cartella vuota cestinabile: {scope}.", []);
     }
 
     var messageScope = includeSubfolders ? $"sotto {rootFolder.AbsolutePath}" : rootFolder.AbsolutePath;
     return new FolderDeletePlanResult(
       true,
-      $"Cartelle vuote eliminabili {messageScope}: {candidates.Count}.",
+      $"Cartelle vuote cestinabili {messageScope}: {candidates.Count}.",
       candidates.Select(folder => folder.AbsolutePath).ToArray());
   }
 

@@ -118,7 +118,7 @@ internal sealed class CarbonioWebClient : IDisposable
     return PostSoapJsonAsync("CreateFolderRequest", payload, cancellationToken);
   }
 
-  public Task<HttpResponseMessage> PostDeleteFolderAsync(string folderId, CancellationToken cancellationToken)
+  public Task<HttpResponseMessage> PostTrashFolderAsync(string folderId, CancellationToken cancellationToken)
   {
     var request = new
     {
@@ -126,7 +126,7 @@ internal sealed class CarbonioWebClient : IDisposable
       action = new
       {
         id = folderId,
-        op = "delete"
+        op = "trash"
       }
     };
     var payload = BuildSoapPayload("FolderActionRequest", request);

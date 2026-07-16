@@ -26,7 +26,7 @@ Funzioni operative disponibili:
 - caricamento cartelle e selezione sorgente/destinazione in UI;
 - destinazione automatica in Archivio, con creazione delle sottocartelle mancanti sotto `/Archive`;
 - elaborazione opzionale della sorgente e di tutte le sue sottocartelle, una alla volta, in modalita' Archivio;
-- eliminazione manuale controllata di cartelle sorgente/destinazione solo se vuote;
+- spostamento manuale controllato nel Cestino di cartelle sorgente/destinazione solo se vuote;
 - caricamento automatico cartelle all'avvio, opzionale, se la password e' disponibile tramite DPAPI;
 - conteggio effettivo dei messaggi con ricerca paginata;
 - spostamento reale della preview;
@@ -109,9 +109,9 @@ Prima dello spostamento reale l'app verifica se il percorso esiste; se mancano c
 
 Se l'opzione "Includi sottocartelle" e' attiva, l'app processa la cartella sorgente selezionata e poi ogni sottocartella, in ordine di percorso. Per ogni cartella viene calcolata e creata, se necessario, la destinazione corrispondente sotto `/Archive`. L'opzione richiede la modalita' Archivio per evitare spostamenti massivi verso una singola destinazione manuale.
 
-## Eliminazione cartelle vuote
+## Cestino cartelle vuote
 
-I pulsanti "Elimina vuote" su sorgente e destinazione ricaricano lo stato dal server prima di eseguire la cancellazione. Se "Includi sottocartelle" non e' attivo, viene valutata solo la cartella selezionata. Se "Includi sottocartelle" e' attivo, l'app valuta il ramo selezionato in modo ricorsivo ed elimina dal livello piu' profondo verso l'alto. L'app non elimina cartelle di sistema, cartelle non modificabili, cartelle con messaggi o rami che contengono cartelle non vuote.
+I pulsanti "Cestina vuote" su sorgente e destinazione ricaricano lo stato dal server prima di spostare cartelle nel Cestino. Se "Includi sottocartelle" non e' attivo, viene valutata solo la cartella selezionata. Se "Includi sottocartelle" e' attivo, l'app valuta il ramo selezionato in modo ricorsivo e sposta nel Cestino dal livello piu' profondo verso l'alto. L'app non sposta cartelle di sistema, cartelle non modificabili, cartelle con messaggi o rami che contengono cartelle non vuote.
 
 ## Build
 

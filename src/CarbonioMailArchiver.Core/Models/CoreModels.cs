@@ -43,7 +43,7 @@ public sealed record ArchiveFolderEnsureResult(bool IsSuccess, MailFolder? Folde
 
 public sealed record FolderDeletePlanResult(bool IsSuccess, string Message, IReadOnlyList<string> CandidatePaths);
 
-public sealed record FolderDeleteResult(bool IsSuccess, string Message, int DeletedCount);
+public sealed record FolderDeleteResult(bool IsSuccess, string Message, int MovedToTrashCount);
 
 public enum ArchiveOperationMode
 {

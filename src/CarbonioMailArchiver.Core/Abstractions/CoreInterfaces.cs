@@ -37,7 +37,7 @@ public interface IArchiveFolderService
 public interface IFolderMaintenanceService
 {
   Task<FolderDeletePlanResult> AnalyzeEmptyFoldersAsync(CarbonioConnectionSettings settings, string password, string folderId, bool includeSubfolders, CancellationToken cancellationToken);
-  Task<FolderDeleteResult> DeleteEmptyFoldersAsync(CarbonioConnectionSettings settings, string password, string folderId, bool includeSubfolders, CancellationToken cancellationToken);
+  Task<FolderDeleteResult> TrashEmptyFoldersAsync(CarbonioConnectionSettings settings, string password, string folderId, bool includeSubfolders, CancellationToken cancellationToken);
 }
 
 public interface IMoveDiagnosticService

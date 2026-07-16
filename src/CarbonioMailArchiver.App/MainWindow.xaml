@@ -73,7 +73,7 @@
                                           DisplayMemberPath="DisplayName"
                                           MinWidth="340"
                                           HorizontalAlignment="Left" />
-                                <Button Content="Elimina vuote"
+                                <Button Content="Cestina vuote"
                                         Command="{Binding DeleteSourceFolderIfEmptyCommand}"
                                         Width="120"
                                         Margin="10,0,0,0" />
@@ -100,7 +100,7 @@
                                       Margin="0,0,0,12" />
                             <Button Grid.Row="8"
                                     Grid.Column="1"
-                                    Content="Elimina vuote"
+                                    Content="Cestina vuote"
                                     Command="{Binding DeleteDestinationFolderIfEmptyCommand}"
                                     IsEnabled="{Binding IsDestinationFolderSelectionEnabled}"
                                     Width="120"

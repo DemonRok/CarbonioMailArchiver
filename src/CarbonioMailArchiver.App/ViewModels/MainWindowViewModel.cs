@@ -1150,30 +1150,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       PreviewMessages.Clear();
       foreach (var candidatePath in plan.CandidatePaths)
       {
-        PreviewMessages.Add(new MailMessagePreviewViewModel(candidatePath, "Cartella vuota candidata all'eliminazione", candidatePath));
+        PreviewMessages.Add(new MailMessagePreviewViewModel(candidatePath, "Cartella vuota candidata allo spostamento nel cestino", candidatePath));
       }
       StatusMessage = $"Cartelle vuote candidate: {plan.CandidatePaths.Count}. Controlla la preview prima di confermare.";
 
       var confirmation = MessageBox.Show(
-        $"Eliminare {plan.CandidatePaths.Count} {scope}?\n\nL'elenco completo e' visibile nella preview.",
-        "Conferma eliminazione cartelle vuote",
+        $"Spostare nel cestino {plan.CandidatePaths.Count} {scope}?\n\nL'elenco completo e' visibile nella preview.",
+        "Conferma spostamento cartelle vuote nel cestino",
         MessageBoxButton.YesNo,
         MessageBoxImage.Warning,
         MessageBoxResult.No);
       if (confirmation != MessageBoxResult.Yes)
       {
-        StatusMessage = "Eliminazione cartella annullata.";
+        StatusMessage = "Spostamento cartelle vuote nel cestino annullato.";
         return;
       }
 
-      var result = await _folderMaintenanceService.DeleteEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
+      var result = await _folderMaintenanceService.TrashEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
       StatusMessage = result.Message;
       await LoadFoldersAsync();
       await RefreshLogsAsync();
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
     {
-      StatusMessage = $"Eliminazione cartella non completata: {ex.Message}";
+      StatusMessage = $"Spostamento cartella nel cestino non completato: {ex.Message}";
       await RefreshLogsAsync();
     }
   }
