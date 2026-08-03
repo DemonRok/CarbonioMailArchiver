@@ -58,6 +58,15 @@ public interface IMessageDownloadService
     int retryDelaySeconds,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken);
+
+  Task<MailDownloadResult> VerifyFolderTreeAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    MailFolder rootFolder,
+    IReadOnlyList<MailFolder> foldersToVerify,
+    string downloadRootDirectory,
+    IProgress<MailDownloadProgress>? progress,
+    CancellationToken cancellationToken);
 }
 
 public interface IMailSearchService

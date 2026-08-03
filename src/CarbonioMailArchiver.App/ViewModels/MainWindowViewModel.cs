@@ -135,6 +135,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveAllSearchResultsCommand = _moveAllSearchResultsCommand;
     CancelMoveCommand = _cancelMoveCommand;
     DownloadMessagesCommand = new AsyncRelayCommand(DownloadMessagesAsync, () => !IsMoveInProgress);
+    VerifyDownloadedMessagesCommand = new AsyncRelayCommand(VerifyDownloadedMessagesAsync, () => !IsMoveInProgress);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -164,6 +165,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand MoveAllSearchResultsCommand { get; }
   public ICommand CancelMoveCommand { get; }
   public ICommand DownloadMessagesCommand { get; }
+  public ICommand VerifyDownloadedMessagesCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -392,6 +394,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       if (DownloadMessagesCommand is AsyncRelayCommand downloadCommand)
       {
         downloadCommand.RaiseCanExecuteChanged();
+      }
+
+      if (VerifyDownloadedMessagesCommand is AsyncRelayCommand verifyCommand)
+      {
+        verifyCommand.RaiseCanExecuteChanged();
       }
     }
   }
@@ -1169,6 +1176,115 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     finally
     {
       StopDownloadMetricsTimer();
+      IsMoveInProgress = false;
+      _moveCancellationTokenSource = null;
+    }
+  }
+
+  private async Task VerifyDownloadedMessagesAsync()
+  {
+    if (IsMoveInProgress)
+    {
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    if (AvailableFolders.Count == 0)
+    {
+      await LoadFoldersAsync();
+    }
+
+    var rootFolder = ResolveDownloadRootFolder();
+    if (rootFolder is null)
+    {
+      StatusMessage = UseArchiveDestination
+        ? "Cartella /Archive non trovata. Carica le cartelle e verifica che Archivio sia attivo sul server."
+        : "Seleziona una cartella destinazione da verificare, oppure abilita Archivio.";
+      return;
+    }
+
+    var foldersToVerify = GetFoldersUnder(rootFolder).ToArray();
+    if (foldersToVerify.Length == 0)
+    {
+      StatusMessage = $"Nessuna cartella da verificare per {rootFolder.AbsolutePath}.";
+      return;
+    }
+
+    await SaveSettingsSnapshotAsync();
+    var password = await GetPasswordAsync(settings);
+    using var verifyCancellation = new CancellationTokenSource();
+    _moveCancellationTokenSource = verifyCancellation;
+    IsMoveInProgress = true;
+    MoveProgressPercentage = 0;
+    MoveProgressPercentText = string.Empty;
+    MoveBatchText = string.Empty;
+    MoveDetailText = $"Verifica EML in {rootFolder.AbsolutePath}...";
+    MoveProgressText = MoveDetailText;
+    IsMoveProgressIndeterminate = true;
+    OperationMetricsText = string.Empty;
+    OperationDownloadedText = string.Empty;
+    OperationElapsedText = string.Empty;
+    OperationSpeedText = string.Empty;
+    OperationEtaText = string.Empty;
+    OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
+    OperationFileText = "Verifica in corso";
+    StatusMessage = MoveDetailText;
+
+    var progress = new Progress<MailDownloadProgress>(verifyProgress =>
+    {
+      OperationFolderText = $"Cartella: {verifyProgress.CurrentFolder}";
+      OperationFileText = verifyProgress.CurrentFile;
+      MoveDetailText = verifyProgress.TotalCount <= 0
+        ? "Verifica EML: conteggio messaggi in corso..."
+        : $"Verifica EML: presenti {verifyProgress.CompletedCount}/{verifyProgress.TotalCount}.";
+      MoveProgressText = MoveDetailText;
+      StatusMessage = MoveDetailText;
+    });
+
+    try
+    {
+      var result = await _messageDownloadService.VerifyFolderTreeAsync(
+        settings,
+        password,
+        ToMailFolder(rootFolder),
+        foldersToVerify.Select(ToMailFolder).ToArray(),
+        settings.DownloadRootDirectory,
+        progress,
+        verifyCancellation.Token);
+
+      IsMoveProgressIndeterminate = false;
+      MoveProgressPercentage = result.ExpectedCount == 0
+        ? 0
+        : Math.Clamp((int)Math.Round(result.PresentCount * 100d / result.ExpectedCount), 0, 100);
+      MoveProgressPercentText = result.ExpectedCount == 0 ? string.Empty : $"{MoveProgressPercentage}%";
+      MoveDetailText = result.Message;
+      MoveProgressText = MoveDetailText;
+      OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
+      OperationFileText = $"Percorso locale: {result.TargetDirectory}";
+      StatusMessage = result.Message;
+      await RefreshLogsAsync();
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = "Verifica EML annullata dall'utente.";
+      ResetMoveProgress();
+      await RefreshLogsAsync();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or TaskCanceledException)
+    {
+      StatusMessage = $"Verifica EML non completata: {ex.Message}";
+      IsMoveProgressIndeterminate = false;
+      await RefreshLogsAsync();
+    }
+    finally
+    {
       IsMoveInProgress = false;
       _moveCancellationTokenSource = null;
     }

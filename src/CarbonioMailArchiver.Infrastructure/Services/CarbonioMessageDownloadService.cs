@@ -48,69 +48,193 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var skippedCount = 0;
     var downloadedThisSessionCount = 0;
 
+    try
+    {
+      foreach (var folder in folders)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", 0, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
+        messagesByFolder[folder.Id] = messages;
+        totalCount += messages.Count;
+      }
+
+      var completedCount = 0;
+      foreach (var folder in folders)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        var folderDirectory = BuildLocalFolderDirectory(targetDirectory, folder.AbsolutePath, rootFolder.AbsolutePath);
+        Directory.CreateDirectory(folderDirectory);
+
+        foreach (var message in messagesByFolder[folder.Id])
+        {
+          cancellationToken.ThrowIfCancellationRequested();
+          var fileName = BuildMessageFileName(message);
+          var filePath = Path.Combine(folderDirectory, fileName);
+        if (File.Exists(filePath))
+        {
+          ApplyMessageFileTimestamps(filePath, message.Date);
+          skippedCount++;
+          completedCount++;
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          continue;
+          }
+
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          var download = await DownloadMessageWithRetryAsync(
+            client,
+            message,
+            folder.AbsolutePath,
+            filePath,
+            speedLimitKbps,
+            retryCount,
+            retryDelaySeconds,
+            bytesCopied =>
+            {
+              totalBytesDownloaded += bytesCopied;
+              progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+            },
+            cancellationToken);
+          if (!download.IsSuccess)
+          {
+            var failedVerification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+            var failedMessage = AppendVerificationSummary(download.Message, failedVerification);
+            return new MailDownloadResult(false, failedMessage, completedCount, targetDirectory, failedVerification.ExpectedCount, failedVerification.PresentCount, failedVerification.MissingCount);
+          }
+
+          completedCount++;
+          downloadedThisSessionCount++;
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        }
+      }
+
+      var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+      logger.LogInformation(
+        "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi completati: {Count}. Saltati per resume: {SkippedCount}. Verifica: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
+        settings.Email,
+        rootFolder.AbsolutePath,
+        completedCount,
+        skippedCount,
+        verification.PresentCount,
+        verification.ExpectedCount,
+        verification.MissingCount);
+      var skippedMessage = skippedCount == 0 ? string.Empty : $" Gia' presenti saltati: {skippedCount}.";
+      var successMessage = AppendVerificationSummary($"Download EML completato. Messaggi completati: {completedCount}.{skippedMessage}", verification);
+      return new MailDownloadResult(verification.MissingCount == 0, successMessage, completedCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
+    }
+    catch (OperationCanceledException)
+    {
+      var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+      var cancelMessage = AppendVerificationSummary("Download EML annullato dall'utente.", verification);
+      logger.LogWarning(
+        "Download EML annullato per {Account}. Verifica parziale: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
+        settings.Email,
+        verification.PresentCount,
+        verification.ExpectedCount,
+        verification.MissingCount);
+      return new MailDownloadResult(false, cancelMessage, verification.PresentCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
+    }
+  }
+
+  public async Task<MailDownloadResult> VerifyFolderTreeAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    MailFolder rootFolder,
+    IReadOnlyList<MailFolder> foldersToVerify,
+    string downloadRootDirectory,
+    IProgress<MailDownloadProgress>? progress,
+    CancellationToken cancellationToken)
+  {
+    using var client = CarbonioWebClient.Create(settings, out var validationError);
+    if (validationError is not null)
+    {
+      return new MailDownloadResult(false, validationError, 0, string.Empty);
+    }
+
+    var loginError = await client.LoginAsync(password, cancellationToken);
+    if (loginError is not null)
+    {
+      logger.LogWarning("Login Carbonio Auth fallito per verifica EML {Account}: {Reason}", settings.Email, loginError);
+      return new MailDownloadResult(false, loginError, 0, string.Empty);
+    }
+
+    var targetDirectory = Path.Combine(downloadRootDirectory, SanitizePathSegment(settings.Email));
+    var folders = foldersToVerify
+      .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
+      .ToArray();
+    var messagesByFolder = new Dictionary<string, IReadOnlyList<MailMessageSummary>>(StringComparer.Ordinal);
+    var totalCount = 0;
+    var operationStopwatch = Stopwatch.StartNew();
+
     foreach (var folder in folders)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", 0, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
       var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
       messagesByFolder[folder.Id] = messages;
       totalCount += messages.Count;
     }
 
-    var completedCount = 0;
+    var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder, repairTimestamps: true);
+    var message = AppendVerificationSummary("Verifica EML completata.", verification);
+    logger.LogInformation(
+      "Verifica EML completata per {Account}. Cartella radice: {RootFolder}. Presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
+      settings.Email,
+      rootFolder.AbsolutePath,
+      verification.PresentCount,
+      verification.ExpectedCount,
+      verification.MissingCount);
+    progress?.Report(new MailDownloadProgress(rootFolder.AbsolutePath, "Verifica completata.", verification.PresentCount, verification.ExpectedCount, 0, 0, 0, operationStopwatch.Elapsed));
+    return new MailDownloadResult(verification.MissingCount == 0, message, verification.PresentCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
+  }
+
+  private sealed record DownloadVerification(int ExpectedCount, int PresentCount, int MissingCount);
+
+  private static DownloadVerification VerifyDownloadedMessages(
+    string targetDirectory,
+    MailFolder rootFolder,
+    IReadOnlyList<MailFolder> folders,
+    IReadOnlyDictionary<string, IReadOnlyList<MailMessageSummary>> messagesByFolder,
+    bool repairTimestamps = false)
+  {
+    var expectedCount = 0;
+    var presentCount = 0;
     foreach (var folder in folders)
     {
-      cancellationToken.ThrowIfCancellationRequested();
-      var folderDirectory = BuildLocalFolderDirectory(targetDirectory, folder.AbsolutePath, rootFolder.AbsolutePath);
-      Directory.CreateDirectory(folderDirectory);
-
-      foreach (var message in messagesByFolder[folder.Id])
+      if (!messagesByFolder.TryGetValue(folder.Id, out var messages))
       {
-        cancellationToken.ThrowIfCancellationRequested();
-        var fileName = BuildMessageFileName(message);
-        var filePath = Path.Combine(folderDirectory, fileName);
+        continue;
+      }
+
+      var folderDirectory = BuildLocalFolderDirectory(targetDirectory, folder.AbsolutePath, rootFolder.AbsolutePath);
+      foreach (var message in messages)
+      {
+        expectedCount++;
+        var filePath = Path.Combine(folderDirectory, BuildMessageFileName(message));
         if (File.Exists(filePath))
         {
-          skippedCount++;
-          completedCount++;
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-          continue;
-        }
-
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-        var download = await DownloadMessageWithRetryAsync(
-          client,
-          message,
-          folder.AbsolutePath,
-          filePath,
-          speedLimitKbps,
-          retryCount,
-          retryDelaySeconds,
-          bytesCopied =>
+          if (repairTimestamps)
           {
-            totalBytesDownloaded += bytesCopied;
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-          },
-          cancellationToken);
-        if (!download.IsSuccess)
-        {
-          return new MailDownloadResult(false, download.Message, completedCount, targetDirectory);
-        }
+            ApplyMessageFileTimestamps(filePath, message.Date);
+          }
 
-        completedCount++;
-        downloadedThisSessionCount++;
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          presentCount++;
+        }
       }
     }
 
-    logger.LogInformation(
-      "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi completati: {Count}. Saltati per resume: {SkippedCount}.",
-      settings.Email,
-      rootFolder.AbsolutePath,
-      completedCount,
-      skippedCount);
-    var skippedMessage = skippedCount == 0 ? string.Empty : $" Gia' presenti saltati: {skippedCount}.";
-    return new MailDownloadResult(true, $"Download EML completato. Messaggi completati: {completedCount}.{skippedMessage}", completedCount, targetDirectory);
+    return new DownloadVerification(expectedCount, presentCount, Math.Max(expectedCount - presentCount, 0));
+  }
+
+  private static string AppendVerificationSummary(string message, DownloadVerification verification)
+  {
+    if (verification.ExpectedCount == 0)
+    {
+      return $"{message} Verifica: nessun messaggio atteso rilevato.";
+    }
+
+    var result = verification.MissingCount == 0 ? "OK" : $"{verification.MissingCount} mancanti";
+    return $"{message} Verifica EML: presenti {verification.PresentCount}/{verification.ExpectedCount}, {result}.";
   }
 
   internal static string BuildLocalFolderDirectory(string accountDirectory, string folderPath, string rootFolderPath)
@@ -279,6 +403,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
         ApplyMessageFileTimestamps(tempFilePath, message.Date);
         File.Move(tempFilePath, filePath);
+        ApplyMessageFileTimestamps(filePath, message.Date);
         return (true, string.Empty);
       }
       catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)

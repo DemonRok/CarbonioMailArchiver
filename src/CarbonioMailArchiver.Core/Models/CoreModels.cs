@@ -59,7 +59,10 @@ public sealed record MailDownloadResult(
   bool IsSuccess,
   string Message,
   int DownloadedCount,
-  string TargetDirectory);
+  string TargetDirectory,
+  int ExpectedCount = 0,
+  int PresentCount = 0,
+  int MissingCount = 0);
 
 public enum ArchiveOperationMode
 {

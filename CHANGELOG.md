@@ -2,6 +2,12 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.7] - 2026-08-03
+
+- Aggiunta verifica EML automatica a fine download, errore o annullamento, con conteggio presenti/mancanti.
+- Aggiunto pulsante `Verifica EML` per confrontare i messaggi attesi dal server con i file EML gia' presenti su disco.
+- Aggiornata la data dei file EML gia' presenti durante resume e verifica, usando la data effettiva del messaggio.
+
 ## [1.7.6] - 2026-08-03
 
 - Corretto il rilascio del file temporaneo EML prima del rinomina finale.
