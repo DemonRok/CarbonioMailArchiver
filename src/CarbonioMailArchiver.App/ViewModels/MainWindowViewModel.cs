@@ -631,6 +631,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     PreviewMessages.Clear();
     StatusMessage = $"Spostamento completato. Messaggi spostati: {result.MovedCount}.";
     await RefreshLogsAsync();
+    ShowMoveCompletedMessage();
   }
 
   private async Task MoveAllSearchResultsAsync()
@@ -845,6 +846,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         CancellationToken.None);
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
       await RefreshLogsAsync();
+      ShowMoveCompletedMessage();
     }
     catch (OperationCanceledException)
     {
@@ -1085,6 +1087,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return string.IsNullOrWhiteSpace(reportPath)
       ? " Report non esportato."
       : $" Report: {reportPath}";
+  }
+
+  private static void ShowMoveCompletedMessage()
+  {
+    MessageBox.Show(
+      "Spostamento completato.",
+      "Spostamento completato",
+      MessageBoxButton.OK,
+      MessageBoxImage.Information);
   }
 
   private async Task RefreshLogsAsync()

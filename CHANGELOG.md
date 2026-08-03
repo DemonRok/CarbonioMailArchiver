@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.6.1] - In preparazione
+
+- Aggiunta conferma finale con pulsante OK al termine degli spostamenti completati.
+
 ## [1.6.0] - In preparazione
 
 - Modificata la pulizia cartelle vuote: le cartelle vengono spostate nel cestino invece che eliminate.
