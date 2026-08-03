@@ -42,6 +42,20 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       Directory.Delete(rootLocalDirectory, recursive: true);
     }
 
+    var legacySelectedRootDirectory = BuildLegacyLocalFolderDirectory(targetDirectory, rootFolder.AbsolutePath);
+    if (!string.Equals(legacySelectedRootDirectory, rootLocalDirectory, StringComparison.OrdinalIgnoreCase)
+      && Directory.Exists(legacySelectedRootDirectory))
+    {
+      Directory.Delete(legacySelectedRootDirectory, recursive: true);
+    }
+
+    var legacyArchiveDirectory = Path.Combine(targetDirectory, "Archive");
+    if (rootFolder.AbsolutePath.StartsWith("/Archive", StringComparison.OrdinalIgnoreCase)
+      && Directory.Exists(legacyArchiveDirectory))
+    {
+      Directory.Delete(legacyArchiveDirectory, recursive: true);
+    }
+
     var folders = foldersToDownload
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
       .ToArray();
@@ -121,14 +135,44 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
   internal static string BuildRelativeDownloadPath(string folderPath, string rootFolderPath)
   {
-    if (string.Equals(rootFolderPath, "/Archive", StringComparison.OrdinalIgnoreCase))
+    var normalizedFolderPath = NormalizeFolderPath(folderPath);
+    var normalizedRootFolderPath = NormalizeFolderPath(rootFolderPath);
+
+    if (string.Equals(normalizedFolderPath, normalizedRootFolderPath, StringComparison.OrdinalIgnoreCase))
     {
-      return folderPath.StartsWith("/Archive/", StringComparison.OrdinalIgnoreCase)
-        ? folderPath["/Archive/".Length..]
-        : string.Empty;
+      return string.Empty;
     }
 
-    return folderPath.TrimStart('/');
+    var rootPrefix = normalizedRootFolderPath.TrimEnd('/') + "/";
+    if (normalizedFolderPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+    {
+      return normalizedFolderPath[rootPrefix.Length..];
+    }
+
+    if (normalizedFolderPath.StartsWith("/Archive/", StringComparison.OrdinalIgnoreCase))
+    {
+      return normalizedFolderPath["/Archive/".Length..];
+    }
+
+    return normalizedFolderPath.TrimStart('/');
+  }
+
+  private static string BuildLegacyLocalFolderDirectory(string accountDirectory, string folderPath)
+  {
+    var relativeParts = NormalizeFolderPath(folderPath)
+      .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+      .Select(SanitizePathSegment)
+      .Where(part => !string.IsNullOrWhiteSpace(part))
+      .ToArray();
+    return relativeParts.Length == 0
+      ? accountDirectory
+      : Path.Combine([accountDirectory, .. relativeParts]);
+  }
+
+  private static string NormalizeFolderPath(string folderPath)
+  {
+    var normalized = "/" + folderPath.Trim().Trim('/');
+    return normalized == "/" ? string.Empty : normalized;
   }
 
   internal static string SanitizePathSegment(string value)
