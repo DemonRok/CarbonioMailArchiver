@@ -48,8 +48,10 @@ public sealed record FolderDeleteResult(bool IsSuccess, string Message, int Move
 public sealed record MailDownloadProgress(
   string CurrentFolder,
   string CurrentFile,
-  int DownloadedCount,
+  int CompletedCount,
   int TotalCount,
+  int SkippedCount,
+  int DownloadedThisSessionCount,
   long BytesDownloaded,
   TimeSpan Elapsed);
 

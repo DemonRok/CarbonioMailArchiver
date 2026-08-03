@@ -2,6 +2,14 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.6] - 2026-08-03
+
+- Corretto il rilascio del file temporaneo EML prima del rinomina finale.
+- Migliorato il calcolo ETA del download EML con resume: la stima usa solo le email scaricate nella sessione corrente.
+- Separate le metriche operative di download in righe dedicate per trascorso, velocita', MB scaricati ed ETA.
+- Separati contatore, cartella corrente e file corrente durante il download EML per ridurre oscillazioni del testo.
+- Ridotto a 5 secondi l'intervallo di ricalcolo ETA dopo la prima stima stabile.
+
 ## [1.7.5] - 2026-08-03
 
 - Aggiunti retry sul download dei singoli EML in caso di timeout o errori HTTP temporanei.

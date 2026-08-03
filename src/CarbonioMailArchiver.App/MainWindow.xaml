@@ -5,6 +5,30 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}" Height="866" MinHeight="580" Width="1118" MinWidth="780">
+    <Window.Resources>
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="8,2" />
+            <Style.Triggers>
+                <Trigger Property="Content" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="OperationTextBlockStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#666" />
+            <Setter Property="Margin" Value="0,2,12,0" />
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Setter Property="Margin" Value="0" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -120,7 +144,7 @@
                         </Grid>
                     </ScrollViewer>
 
-                    <Grid Grid.Row="1" Margin="0,18,0,8">
+                    <Grid Grid.Row="1" Margin="0,6,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -130,8 +154,22 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <Grid Grid.ColumnSpan="2">
+                        <Grid Grid.ColumnSpan="2" Margin="0,0,0,3">
+                            <TextBlock Text="{Binding OperationElapsedText}"
+                                       VerticalAlignment="Center"
+                                       Foreground="#666" />
+                            <TextBlock Text="{Binding OperationSpeedText}"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       Foreground="#666" />
+                        </Grid>
+                        <Grid Grid.Row="1" Grid.ColumnSpan="2">
                             <ProgressBar Minimum="0"
                                          Maximum="100"
                                          Height="20"
@@ -143,27 +181,38 @@
                                        FontWeight="SemiBold"
                                        Foreground="#222" />
                         </Grid>
-                        <TextBlock Grid.Row="1"
-                                   Text="{Binding MoveBatchText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="#333"
-                                   Margin="0,4,12,0" />
                         <TextBlock Grid.Row="2"
-                                   Text="{Binding MoveDetailText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="#555"
-                                   Margin="0,2,12,0" />
+                                   Text="{Binding MoveBatchText}"
+                                   Foreground="#333"
+                                   Style="{StaticResource OperationTextBlockStyle}"
+                                   Margin="0,4,12,0" />
                         <TextBlock Grid.Row="3"
+                                   Text="{Binding MoveDetailText}"
+                                   Style="{StaticResource OperationTextBlockStyle}"
+                                   Foreground="#555" />
+                        <TextBlock Grid.Row="4"
+                                   Text="{Binding OperationFolderText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <TextBlock Grid.Row="5"
+                                   Text="{Binding OperationFileText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <TextBlock Grid.Row="6"
+                                   Text="{Binding OperationDownloadedText}"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <TextBlock Grid.Row="7"
+                                   Text="{Binding OperationEtaText}"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <TextBlock Grid.Row="8"
                                    Text="{Binding OperationMetricsText}"
-                                   VerticalAlignment="Center"
-                                   Foreground="#666"
-                                   Margin="0,2,12,0" />
-                        <Button Grid.Row="1"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <Button Grid.Row="3"
                                 Grid.Column="1"
-                                Grid.RowSpan="3"
                                 Content="Annulla"
                                 Command="{Binding CancelMoveCommand}"
                                 Width="96"
+                                VerticalAlignment="Top"
                                 Margin="0,4,0,0" />
                     </Grid>
 

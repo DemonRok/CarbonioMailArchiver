@@ -46,17 +46,18 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var operationStopwatch = Stopwatch.StartNew();
     long totalBytesDownloaded = 0;
     var skippedCount = 0;
+    var downloadedThisSessionCount = 0;
 
     foreach (var folder in folders)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", totalCount, 0, totalBytesDownloaded, operationStopwatch.Elapsed));
+      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", 0, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
       var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
       messagesByFolder[folder.Id] = messages;
       totalCount += messages.Count;
     }
 
-    var downloadedCount = 0;
+    var completedCount = 0;
     foreach (var folder in folders)
     {
       cancellationToken.ThrowIfCancellationRequested();
@@ -71,12 +72,12 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
         if (File.Exists(filePath))
         {
           skippedCount++;
-          downloadedCount++;
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          completedCount++;
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
           continue;
         }
 
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
         var download = await DownloadMessageWithRetryAsync(
           client,
           message,
@@ -88,16 +89,17 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           bytesCopied =>
           {
             totalBytesDownloaded += bytesCopied;
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
           },
           cancellationToken);
         if (!download.IsSuccess)
         {
-          return new MailDownloadResult(false, download.Message, downloadedCount, targetDirectory);
+          return new MailDownloadResult(false, download.Message, completedCount, targetDirectory);
         }
 
-        downloadedCount++;
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        completedCount++;
+        downloadedThisSessionCount++;
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
       }
     }
 
@@ -105,10 +107,10 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi completati: {Count}. Saltati per resume: {SkippedCount}.",
       settings.Email,
       rootFolder.AbsolutePath,
-      downloadedCount,
+      completedCount,
       skippedCount);
     var skippedMessage = skippedCount == 0 ? string.Empty : $" Gia' presenti saltati: {skippedCount}.";
-    return new MailDownloadResult(true, $"Download EML completato. Messaggi completati: {downloadedCount}.{skippedMessage}", downloadedCount, targetDirectory);
+    return new MailDownloadResult(true, $"Download EML completato. Messaggi completati: {completedCount}.{skippedMessage}", completedCount, targetDirectory);
   }
 
   internal static string BuildLocalFolderDirectory(string accountDirectory, string folderPath, string rootFolderPath)
@@ -269,9 +271,12 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           continue;
         }
 
-        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var destination = File.Create(tempFilePath);
-        await CopyToAsync(source, destination, speedLimitKbps, reportBytesCopied, cancellationToken);
+        await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
+        await using (var destination = File.Create(tempFilePath))
+        {
+          await CopyToAsync(source, destination, speedLimitKbps, reportBytesCopied, cancellationToken);
+        }
+
         ApplyMessageFileTimestamps(tempFilePath, message.Date);
         File.Move(tempFilePath, filePath);
         return (true, string.Empty);
@@ -286,7 +291,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
         if (attempt == maxAttempts)
         {
-          var errorMessage = $"Download EML fallito per messaggio {message.Id} dopo {maxAttempts} tentativi: {ex.Message}";
+          var errorMessage = $"Download EML fallito per messaggio {message.Id} dopo {maxAttempts} tentativi su {filePath}: {ex.Message}";
           logger.LogWarning(ex, "{Message} Cartella: {FolderPath}.", errorMessage, folderPath);
           return (false, errorMessage);
         }

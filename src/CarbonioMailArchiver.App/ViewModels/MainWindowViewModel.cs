@@ -66,9 +66,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _moveBatchText = string.Empty;
   private string _moveDetailText = "Nessuno spostamento in corso.";
   private string _operationMetricsText = string.Empty;
+  private string _operationDownloadedText = string.Empty;
+  private string _operationElapsedText = string.Empty;
+  private string _operationSpeedText = string.Empty;
+  private string _operationEtaText = string.Empty;
+  private string _operationFolderText = string.Empty;
+  private string _operationFileText = string.Empty;
   private MailDownloadProgress? _lastDownloadProgress;
   private string _stableDownloadEtaText = "ETA in calcolo";
   private DateTimeOffset _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+  private DateTimeOffset _downloadStartedAt = DateTimeOffset.MinValue;
+  private TimeSpan _downloadSpeedWarmupThreshold = TimeSpan.FromSeconds(50);
+  private TimeSpan _downloadEtaWarmupThreshold = TimeSpan.FromSeconds(75);
   private DispatcherTimer? _downloadMetricsTimer;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
@@ -76,9 +85,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private const string RepositoryUrl = "https://github.com/DemonRok/CarbonioMailArchiver";
   private const string ReleasesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/releases";
   private const string IssuesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/issues";
-  private static readonly TimeSpan DownloadSpeedWarmup = TimeSpan.FromSeconds(50);
-  private static readonly TimeSpan DownloadEtaWarmup = TimeSpan.FromMinutes(1);
-  private static readonly TimeSpan DownloadEtaRefreshInterval = TimeSpan.FromSeconds(15);
+  private static readonly TimeSpan DownloadEtaRefreshInterval = TimeSpan.FromSeconds(5);
   private static readonly string CurrentVersion =
     typeof(MainWindowViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
     ?? "dev";
@@ -431,6 +438,42 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _operationMetricsText;
     private set => SetField(ref _operationMetricsText, value);
+  }
+
+  public string OperationDownloadedText
+  {
+    get => _operationDownloadedText;
+    private set => SetField(ref _operationDownloadedText, value);
+  }
+
+  public string OperationElapsedText
+  {
+    get => _operationElapsedText;
+    private set => SetField(ref _operationElapsedText, value);
+  }
+
+  public string OperationSpeedText
+  {
+    get => _operationSpeedText;
+    private set => SetField(ref _operationSpeedText, value);
+  }
+
+  public string OperationEtaText
+  {
+    get => _operationEtaText;
+    private set => SetField(ref _operationEtaText, value);
+  }
+
+  public string OperationFolderText
+  {
+    get => _operationFolderText;
+    private set => SetField(ref _operationFolderText, value);
+  }
+
+  public string OperationFileText
+  {
+    get => _operationFileText;
+    private set => SetField(ref _operationFileText, value);
   }
 
   public string StatusMessage
@@ -1013,14 +1056,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IsMoveInProgress = true;
     MoveProgressPercentage = 0;
     MoveProgressPercentText = string.Empty;
-    MoveBatchText = "Download EML";
+    MoveBatchText = string.Empty;
     MoveDetailText = $"Conteggio messaggi in {rootFolder.AbsolutePath}...";
     MoveProgressText = MoveDetailText;
     IsMoveProgressIndeterminate = true;
-    OperationMetricsText = "Download: conteggio in corso. ETA in calcolo.";
-    _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, TimeSpan.Zero);
+    OperationMetricsText = string.Empty;
+    OperationDownloadedText = "MB scaricati: conteggio in corso";
+    OperationElapsedText = "Trascorso: 0s";
+    OperationSpeedText = "Velocita': in calcolo";
+    OperationEtaText = "ETA: in calcolo";
+    OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
+    OperationFileText = "File: conteggio in corso";
+    _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, 0, 0, TimeSpan.Zero);
     _stableDownloadEtaText = "ETA in calcolo";
     _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+    _downloadStartedAt = DateTimeOffset.Now;
+    ResetDownloadWarmupThresholds();
     StartDownloadMetricsTimer();
     StatusMessage = MoveDetailText;
 
@@ -1032,18 +1083,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IsMoveProgressIndeterminate = true;
         MoveProgressPercentText = string.Empty;
         MoveProgressPercentage = 0;
-        MoveDetailText = $"{downloadProgress.CurrentFolder}: {downloadProgress.CurrentFile}";
+        MoveDetailText = "Conteggio messaggi in corso...";
       }
       else
       {
         IsMoveProgressIndeterminate = false;
-        MoveProgressPercentage = Math.Clamp((int)Math.Round(downloadProgress.DownloadedCount * 100d / downloadProgress.TotalCount), 0, 100);
+        MoveProgressPercentage = Math.Clamp((int)Math.Round(downloadProgress.CompletedCount * 100d / downloadProgress.TotalCount), 0, 100);
         MoveProgressPercentText = $"{MoveProgressPercentage}%";
-        MoveDetailText = $"{downloadProgress.CurrentFolder}: {downloadProgress.DownloadedCount}/{downloadProgress.TotalCount} messaggi scaricati. {downloadProgress.CurrentFile}";
+        MoveDetailText = $"Messaggi completati: {downloadProgress.CompletedCount}/{downloadProgress.TotalCount}";
       }
 
-      MoveBatchText = "Download EML";
-      OperationMetricsText = FormatDownloadMetrics(downloadProgress, DateTimeOffset.Now, ref _stableDownloadEtaText, ref _lastDownloadEtaUpdate);
+      MoveBatchText = string.Empty;
+      OperationFolderText = $"Cartella: {downloadProgress.CurrentFolder}";
+      OperationFileText = $"File: {downloadProgress.CurrentFile}";
+      UpdateDownloadMetricTexts(downloadProgress, GetMonotonicDownloadElapsed(downloadProgress.Elapsed), DateTimeOffset.Now);
       MoveProgressText = MoveDetailText;
       StatusMessage = MoveDetailText;
     });
@@ -1076,6 +1129,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveDetailText = $"{result.DownloadedCount} messaggi completati in {result.TargetDirectory}.";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
+      OperationDownloadedText = string.Empty;
+      OperationElapsedText = string.Empty;
+      OperationSpeedText = string.Empty;
+      OperationEtaText = string.Empty;
+      OperationFolderText = string.Empty;
+      OperationFileText = string.Empty;
       MoveProgressText = MoveDetailText;
       StatusMessage = result.Message;
       await RefreshLogsAsync();
@@ -1099,6 +1158,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = $"Download EML non completato: {ex.Message}";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
+      OperationDownloadedText = string.Empty;
+      OperationElapsedText = string.Empty;
+      OperationSpeedText = string.Empty;
+      OperationEtaText = string.Empty;
+      OperationFolderText = string.Empty;
+      OperationFileText = string.Empty;
       await RefreshLogsAsync();
     }
     finally
@@ -1648,6 +1713,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveDetailText = detailText;
       MoveProgressText = $"{batchText}. {detailText}";
       OperationMetricsText = string.Empty;
+      OperationDownloadedText = string.Empty;
+      OperationElapsedText = string.Empty;
+      OperationSpeedText = string.Empty;
+      OperationEtaText = string.Empty;
+      OperationFolderText = string.Empty;
+      OperationFileText = string.Empty;
       return;
     }
 
@@ -1658,6 +1729,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveDetailText = detailText;
     MoveProgressText = $"{batchText}. {detailText}";
     OperationMetricsText = string.Empty;
+    OperationDownloadedText = string.Empty;
+    OperationElapsedText = string.Empty;
+    OperationSpeedText = string.Empty;
+    OperationEtaText = string.Empty;
+    OperationFolderText = string.Empty;
+    OperationFileText = string.Empty;
   }
 
   private async Task AnimateMoveProgressAsync(int fromCount, int toCount, int expectedTotal, string text, CancellationToken cancellationToken)
@@ -1690,6 +1767,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = string.Empty;
     MoveDetailText = MoveProgressText;
     OperationMetricsText = string.Empty;
+    OperationDownloadedText = string.Empty;
+    OperationElapsedText = string.Empty;
+    OperationSpeedText = string.Empty;
+    OperationEtaText = string.Empty;
+    OperationFolderText = string.Empty;
+    OperationFileText = string.Empty;
   }
 
   private void StartDownloadMetricsTimer()
@@ -1716,6 +1799,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _lastDownloadProgress = null;
     _stableDownloadEtaText = "ETA in calcolo";
     _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+    _downloadStartedAt = DateTimeOffset.MinValue;
   }
 
   private void DownloadMetricsTimer_OnTick(object? sender, EventArgs e)
@@ -1725,35 +1809,53 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    var elapsedProgress = _lastDownloadProgress with { Elapsed = _lastDownloadProgress.Elapsed + TimeSpan.FromSeconds(1) };
+    var elapsedProgress = _lastDownloadProgress with { Elapsed = GetMonotonicDownloadElapsed(_lastDownloadProgress.Elapsed) };
     _lastDownloadProgress = elapsedProgress;
-    OperationMetricsText = FormatDownloadMetrics(elapsedProgress, DateTimeOffset.Now, ref _stableDownloadEtaText, ref _lastDownloadEtaUpdate);
+    UpdateDownloadMetricTexts(elapsedProgress, elapsedProgress.Elapsed, DateTimeOffset.Now);
   }
 
-  private static string FormatDownloadMetrics(
-    MailDownloadProgress progress,
-    DateTimeOffset now,
-    ref string stableEtaText,
-    ref DateTimeOffset lastEtaUpdate)
+  private TimeSpan GetMonotonicDownloadElapsed(TimeSpan serviceElapsed)
   {
-    var elapsed = progress.Elapsed < TimeSpan.Zero ? TimeSpan.Zero : progress.Elapsed;
+    var uiElapsed = _downloadStartedAt == DateTimeOffset.MinValue
+      ? serviceElapsed
+      : DateTimeOffset.Now - _downloadStartedAt;
+    var currentDisplayedElapsed = _lastDownloadProgress?.Elapsed ?? TimeSpan.Zero;
+    return new[] { serviceElapsed, uiElapsed, currentDisplayedElapsed, TimeSpan.Zero }.Max();
+  }
+
+  private void ResetDownloadWarmupThresholds()
+  {
+    _downloadSpeedWarmupThreshold = TimeSpan.FromSeconds(Random.Shared.Next(50, 101));
+    _downloadEtaWarmupThreshold = _downloadSpeedWarmupThreshold + TimeSpan.FromSeconds(Random.Shared.Next(15, 61));
+  }
+
+  private void UpdateDownloadMetricTexts(MailDownloadProgress progress, TimeSpan elapsed, DateTimeOffset now)
+  {
     var speedBytesPerSecond = elapsed.TotalSeconds <= 0 ? 0 : progress.BytesDownloaded / elapsed.TotalSeconds;
-    var speedText = elapsed < DownloadSpeedWarmup
+    var speedText = elapsed < _downloadSpeedWarmupThreshold
       ? "velocita' in calcolo"
       : FormatBytesPerSecond(speedBytesPerSecond);
 
-    if (elapsed >= DownloadEtaWarmup
+    if (elapsed >= _downloadEtaWarmupThreshold
       && progress.TotalCount > 0
-      && progress.DownloadedCount > 0
-      && (lastEtaUpdate == DateTimeOffset.MinValue || now - lastEtaUpdate >= DownloadEtaRefreshInterval))
+      && progress.DownloadedThisSessionCount > 0
+      && (_lastDownloadEtaUpdate == DateTimeOffset.MinValue || now - _lastDownloadEtaUpdate >= DownloadEtaRefreshInterval))
     {
-      var remainingMessages = Math.Max(progress.TotalCount - progress.DownloadedCount, 0);
-      var secondsPerMessage = elapsed.TotalSeconds / progress.DownloadedCount;
-      stableEtaText = $"ETA {FormatDuration(TimeSpan.FromSeconds(remainingMessages * secondsPerMessage))}";
-      lastEtaUpdate = now;
+      var remainingMessages = Math.Max(progress.TotalCount - progress.CompletedCount, 0);
+      var secondsPerMessage = elapsed.TotalSeconds / progress.DownloadedThisSessionCount;
+      _stableDownloadEtaText = $"ETA: {FormatDuration(TimeSpan.FromSeconds(remainingMessages * secondsPerMessage))}";
+      _lastDownloadEtaUpdate = now;
     }
 
-    return $"Download: {FormatBytes(progress.BytesDownloaded)} scaricati - {speedText} - trascorso {FormatDuration(elapsed)} - {stableEtaText}";
+    var skippedText = progress.SkippedCount > 0
+      ? $" Gia' presenti saltati: {progress.SkippedCount.ToString(CultureInfo.InvariantCulture)}."
+      : string.Empty;
+    OperationElapsedText = $"Trascorso: {FormatDuration(elapsed)}";
+    OperationSpeedText = $"Velocita': {speedText}";
+    OperationDownloadedText = $"MB scaricati: {FormatBytes(progress.BytesDownloaded)}. Completati: {progress.CompletedCount.ToString(CultureInfo.InvariantCulture)}/{Math.Max(progress.TotalCount, 0).ToString(CultureInfo.InvariantCulture)}.{skippedText}";
+    OperationEtaText = _stableDownloadEtaText.StartsWith("ETA:", StringComparison.Ordinal)
+      ? _stableDownloadEtaText
+      : "ETA: in calcolo";
   }
 
   private static string FormatBytesPerSecond(double bytesPerSecond)
