@@ -10,7 +10,7 @@ Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in ques
 
 - Stabilizzate le metriche download EML e disabilitata la UI operativa durante le operazioni in corso.
 
-## [1.7.1] - In preparazione
+## [1.7.1] - 2026-08-03
 
 - Aggiunte metriche download EML con byte scaricati, velocita' media, tempo trascorso ed ETA.
 
@@ -22,27 +22,27 @@ Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in ques
 - Escluso il segmento `/Archive` dal percorso locale quando si scarica l'Archivio.
 - Migliorata la gestione dell'annullamento download e della fase di conteggio iniziale.
 
-## [1.6.1] - In preparazione
+## [1.6.1] - 2026-08-03
 
 - Aggiunta conferma finale con pulsante OK al termine degli spostamenti completati.
 
-## [1.6.0] - In preparazione
+## [1.6.0] - 2026-07-16
 
 - Modificata la pulizia cartelle vuote: le cartelle vengono spostate nel cestino invece che eliminate.
 
-## [1.5.0] - In preparazione
+## [1.5.0] - 2026-07-16
 
 - Aggiunta eliminazione controllata delle cartelle sorgente/destinazione solo se vuote.
 
-## [1.4.0] - In preparazione
+## [1.4.0] - 2026-07-16
 
 - Aggiunta opzione per processare automaticamente sorgente e sottocartelle replicandole sotto Archivio.
 
-## [1.3.0] - In preparazione
+## [1.3.0] - 2026-07-16
 
 - Aggiunta destinazione automatica in Archivio con creazione del percorso `/Archive/...` coerente con la sorgente.
 
-## [1.2.5] - In preparazione
+## [1.2.5] - 2026-07-16
 
 - Corrette le date di rilascio nel changelog per le versioni gia' pubblicate.
 
