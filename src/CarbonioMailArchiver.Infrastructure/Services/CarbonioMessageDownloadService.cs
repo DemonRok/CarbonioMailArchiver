@@ -71,13 +71,13 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           cancellationToken.ThrowIfCancellationRequested();
           var fileName = BuildMessageFileName(message);
           var filePath = Path.Combine(folderDirectory, fileName);
-        if (File.Exists(filePath))
-        {
-          ApplyMessageFileTimestamps(filePath, message.Date);
-          skippedCount++;
-          completedCount++;
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-          continue;
+          if (File.Exists(filePath))
+          {
+            await RepairMessageFileTimestampAsync(filePath, message.Date, cancellationToken);
+            skippedCount++;
+            completedCount++;
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+            continue;
           }
 
           progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
@@ -97,7 +97,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
             cancellationToken);
           if (!download.IsSuccess)
           {
-            var failedVerification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+            var failedVerification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, false, null, cancellationToken);
             var failedMessage = AppendVerificationSummary(download.Message, failedVerification);
             return new MailDownloadResult(false, failedMessage, completedCount, targetDirectory, failedVerification.ExpectedCount, failedVerification.PresentCount, failedVerification.MissingCount);
           }
@@ -108,7 +108,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
         }
       }
 
-      var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+      var verification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, false, null, cancellationToken);
       logger.LogInformation(
         "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi completati: {Count}. Saltati per resume: {SkippedCount}. Verifica: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
         settings.Email,
@@ -124,7 +124,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     }
     catch (OperationCanceledException)
     {
-      var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder);
+      var verification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, false, null, CancellationToken.None);
       var cancelMessage = AppendVerificationSummary("Download EML annullato dall'utente.", verification);
       logger.LogWarning(
         "Download EML annullato per {Account}. Verifica parziale: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
@@ -175,7 +175,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       totalCount += messages.Count;
     }
 
-    var verification = VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder, repairTimestamps: true);
+    var verification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, true, progress, cancellationToken);
     var message = AppendVerificationSummary("Verifica EML completata.", verification);
     logger.LogInformation(
       "Verifica EML completata per {Account}. Cartella radice: {RootFolder}. Presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
@@ -190,17 +190,35 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
   private sealed record DownloadVerification(int ExpectedCount, int PresentCount, int MissingCount);
 
+  private static Task<DownloadVerification> VerifyDownloadedMessagesAsync(
+    string targetDirectory,
+    MailFolder rootFolder,
+    IReadOnlyList<MailFolder> folders,
+    IReadOnlyDictionary<string, IReadOnlyList<MailMessageSummary>> messagesByFolder,
+    bool repairTimestamps,
+    IProgress<MailDownloadProgress>? progress,
+    CancellationToken cancellationToken)
+  {
+    return Task.Run(
+      () => VerifyDownloadedMessages(targetDirectory, rootFolder, folders, messagesByFolder, repairTimestamps, progress, cancellationToken),
+      cancellationToken);
+  }
+
   private static DownloadVerification VerifyDownloadedMessages(
     string targetDirectory,
     MailFolder rootFolder,
     IReadOnlyList<MailFolder> folders,
     IReadOnlyDictionary<string, IReadOnlyList<MailMessageSummary>> messagesByFolder,
-    bool repairTimestamps = false)
+    bool repairTimestamps,
+    IProgress<MailDownloadProgress>? progress,
+    CancellationToken cancellationToken)
   {
     var expectedCount = 0;
     var presentCount = 0;
+    var processedCount = 0;
     foreach (var folder in folders)
     {
+      cancellationToken.ThrowIfCancellationRequested();
       if (!messagesByFolder.TryGetValue(folder.Id, out var messages))
       {
         continue;
@@ -209,7 +227,9 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       var folderDirectory = BuildLocalFolderDirectory(targetDirectory, folder.AbsolutePath, rootFolder.AbsolutePath);
       foreach (var message in messages)
       {
+        cancellationToken.ThrowIfCancellationRequested();
         expectedCount++;
+        processedCount++;
         var filePath = Path.Combine(folderDirectory, BuildMessageFileName(message));
         if (File.Exists(filePath))
         {
@@ -220,10 +240,26 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
           presentCount++;
         }
+
+        if (processedCount % 250 == 0)
+        {
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica file locali...", presentCount, expectedCount, 0, 0, 0, TimeSpan.Zero));
+        }
       }
     }
 
     return new DownloadVerification(expectedCount, presentCount, Math.Max(expectedCount - presentCount, 0));
+  }
+
+  private static Task RepairMessageFileTimestampAsync(string filePath, DateTimeOffset? messageDate, CancellationToken cancellationToken)
+  {
+    return Task.Run(
+      () =>
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        ApplyMessageFileTimestamps(filePath, messageDate);
+      },
+      cancellationToken);
   }
 
   private static string AppendVerificationSummary(string message, DownloadVerification verification)

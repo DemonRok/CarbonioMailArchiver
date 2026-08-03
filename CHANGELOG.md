@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.8] - 2026-08-03
+
+- Spostata su thread di background la verifica/riparazione timestamp EML per mantenere reattiva la finestra.
+
 ## [1.7.7] - 2026-08-03
 
 - Aggiunta verifica EML automatica a fine download, errore o annullamento, con conteggio presenti/mancanti.
