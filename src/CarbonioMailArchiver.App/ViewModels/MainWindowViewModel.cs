@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using CarbonioMailArchiver.Core.Abstractions;
 using CarbonioMailArchiver.Core.Models;
 using CarbonioMailArchiver.Infrastructure.Configuration;
@@ -62,12 +63,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _moveProgressPercentText = string.Empty;
   private string _moveBatchText = string.Empty;
   private string _moveDetailText = "Nessuno spostamento in corso.";
+  private string _operationMetricsText = string.Empty;
+  private MailDownloadProgress? _lastDownloadProgress;
+  private string _stableDownloadEtaText = "ETA in calcolo";
+  private DateTimeOffset _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+  private DispatcherTimer? _downloadMetricsTimer;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
   private const string RepositoryUrl = "https://github.com/DemonRok/CarbonioMailArchiver";
   private const string ReleasesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/releases";
   private const string IssuesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/issues";
+  private static readonly TimeSpan DownloadSpeedWarmup = TimeSpan.FromSeconds(50);
+  private static readonly TimeSpan DownloadEtaWarmup = TimeSpan.FromMinutes(1);
+  private static readonly TimeSpan DownloadEtaRefreshInterval = TimeSpan.FromSeconds(15);
   private static readonly string CurrentVersion =
     typeof(MainWindowViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]
     ?? "dev";
@@ -352,6 +361,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private set
     {
       SetField(ref _isMoveInProgress, value);
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOperationIdle)));
       _moveAllSearchResultsCommand.RaiseCanExecuteChanged();
       _cancelMoveCommand.RaiseCanExecuteChanged();
       if (DownloadMessagesCommand is AsyncRelayCommand downloadCommand)
@@ -360,6 +370,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
     }
   }
+
+  public bool IsOperationIdle => !IsMoveInProgress;
 
   public int MoveProgressPercentage
   {
@@ -395,6 +407,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     get => _moveDetailText;
     private set => SetField(ref _moveDetailText, value);
+  }
+
+  public string OperationMetricsText
+  {
+    get => _operationMetricsText;
+    private set => SetField(ref _operationMetricsText, value);
   }
 
   public string StatusMessage
@@ -979,10 +997,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveDetailText = $"Conteggio messaggi in {rootFolder.AbsolutePath}...";
     MoveProgressText = MoveDetailText;
     IsMoveProgressIndeterminate = true;
+    OperationMetricsText = "Download: conteggio in corso. ETA in calcolo.";
+    _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, TimeSpan.Zero);
+    _stableDownloadEtaText = "ETA in calcolo";
+    _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+    StartDownloadMetricsTimer();
     StatusMessage = MoveDetailText;
 
     var progress = new Progress<MailDownloadProgress>(downloadProgress =>
     {
+      _lastDownloadProgress = downloadProgress;
       if (downloadProgress.TotalCount <= 0)
       {
         IsMoveProgressIndeterminate = true;
@@ -999,6 +1023,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       MoveBatchText = "Download EML";
+      OperationMetricsText = FormatDownloadMetrics(downloadProgress, DateTimeOffset.Now, ref _stableDownloadEtaText, ref _lastDownloadEtaUpdate);
       MoveProgressText = MoveDetailText;
       StatusMessage = MoveDetailText;
     });
@@ -1027,6 +1052,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       IsMoveProgressIndeterminate = false;
       MoveBatchText = "Download completato";
       MoveDetailText = $"{result.DownloadedCount} messaggi scaricati in {result.TargetDirectory}.";
+      StopDownloadMetricsTimer();
+      OperationMetricsText = string.Empty;
       MoveProgressText = MoveDetailText;
       StatusMessage = result.Message;
       await RefreshLogsAsync();
@@ -1039,16 +1066,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     catch (OperationCanceledException)
     {
       StatusMessage = "Download EML annullato dall'utente.";
+      StopDownloadMetricsTimer();
       ResetMoveProgress();
       await RefreshLogsAsync();
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or TaskCanceledException)
     {
       StatusMessage = $"Download EML non completato: {ex.Message}";
+      StopDownloadMetricsTimer();
+      OperationMetricsText = string.Empty;
       await RefreshLogsAsync();
     }
     finally
     {
+      StopDownloadMetricsTimer();
       IsMoveInProgress = false;
       _moveCancellationTokenSource = null;
     }
@@ -1576,6 +1607,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveBatchText = batchText;
       MoveDetailText = detailText;
       MoveProgressText = $"{batchText}. {detailText}";
+      OperationMetricsText = string.Empty;
       return;
     }
 
@@ -1585,6 +1617,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = batchText;
     MoveDetailText = detailText;
     MoveProgressText = $"{batchText}. {detailText}";
+    OperationMetricsText = string.Empty;
   }
 
   private async Task AnimateMoveProgressAsync(int fromCount, int toCount, int expectedTotal, string text, CancellationToken cancellationToken)
@@ -1607,6 +1640,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private void ResetMoveProgress()
   {
+    StopDownloadMetricsTimer();
     IsMoveInProgress = false;
     _moveCancellationTokenSource = null;
     MoveProgressPercentage = 0;
@@ -1615,6 +1649,107 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveProgressPercentText = string.Empty;
     MoveBatchText = string.Empty;
     MoveDetailText = MoveProgressText;
+    OperationMetricsText = string.Empty;
+  }
+
+  private void StartDownloadMetricsTimer()
+  {
+    StopDownloadMetricsTimer();
+    _downloadMetricsTimer = new DispatcherTimer
+    {
+      Interval = TimeSpan.FromSeconds(1)
+    };
+    _downloadMetricsTimer.Tick += DownloadMetricsTimer_OnTick;
+    _downloadMetricsTimer.Start();
+  }
+
+  private void StopDownloadMetricsTimer()
+  {
+    if (_downloadMetricsTimer is null)
+    {
+      return;
+    }
+
+    _downloadMetricsTimer.Stop();
+    _downloadMetricsTimer.Tick -= DownloadMetricsTimer_OnTick;
+    _downloadMetricsTimer = null;
+    _lastDownloadProgress = null;
+    _stableDownloadEtaText = "ETA in calcolo";
+    _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+  }
+
+  private void DownloadMetricsTimer_OnTick(object? sender, EventArgs e)
+  {
+    if (_lastDownloadProgress is null)
+    {
+      return;
+    }
+
+    var elapsedProgress = _lastDownloadProgress with { Elapsed = _lastDownloadProgress.Elapsed + TimeSpan.FromSeconds(1) };
+    _lastDownloadProgress = elapsedProgress;
+    OperationMetricsText = FormatDownloadMetrics(elapsedProgress, DateTimeOffset.Now, ref _stableDownloadEtaText, ref _lastDownloadEtaUpdate);
+  }
+
+  private static string FormatDownloadMetrics(
+    MailDownloadProgress progress,
+    DateTimeOffset now,
+    ref string stableEtaText,
+    ref DateTimeOffset lastEtaUpdate)
+  {
+    var elapsed = progress.Elapsed < TimeSpan.Zero ? TimeSpan.Zero : progress.Elapsed;
+    var speedBytesPerSecond = elapsed.TotalSeconds <= 0 ? 0 : progress.BytesDownloaded / elapsed.TotalSeconds;
+    var speedText = elapsed < DownloadSpeedWarmup
+      ? "velocita' in calcolo"
+      : FormatBytesPerSecond(speedBytesPerSecond);
+
+    if (elapsed >= DownloadEtaWarmup
+      && progress.TotalCount > 0
+      && progress.DownloadedCount > 0
+      && (lastEtaUpdate == DateTimeOffset.MinValue || now - lastEtaUpdate >= DownloadEtaRefreshInterval))
+    {
+      var remainingMessages = Math.Max(progress.TotalCount - progress.DownloadedCount, 0);
+      var secondsPerMessage = elapsed.TotalSeconds / progress.DownloadedCount;
+      stableEtaText = $"ETA {FormatDuration(TimeSpan.FromSeconds(remainingMessages * secondsPerMessage))}";
+      lastEtaUpdate = now;
+    }
+
+    return $"Download: {FormatBytes(progress.BytesDownloaded)} scaricati - {speedText} - trascorso {FormatDuration(elapsed)} - {stableEtaText}";
+  }
+
+  private static string FormatBytesPerSecond(double bytesPerSecond)
+  {
+    return $"{FormatBytes((long)Math.Max(bytesPerSecond, 0))}/s";
+  }
+
+  private static string FormatBytes(long bytes)
+  {
+    string[] units = ["B", "KB", "MB", "GB", "TB"];
+    var value = (double)Math.Max(bytes, 0);
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.Length - 1)
+    {
+      value /= 1024;
+      unitIndex++;
+    }
+
+    return unitIndex == 0
+      ? $"{value:0} {units[unitIndex]}"
+      : $"{value:0.0} {units[unitIndex]}";
+  }
+
+  private static string FormatDuration(TimeSpan duration)
+  {
+    if (duration.TotalHours >= 1)
+    {
+      return $"{(int)duration.TotalHours:0}h {duration.Minutes:00}m {duration.Seconds:00}s";
+    }
+
+    if (duration.TotalMinutes >= 1)
+    {
+      return $"{duration.Minutes:0}m {duration.Seconds:00}s";
+    }
+
+    return $"{Math.Max(duration.Seconds, 0):0}s";
   }
 
   private FolderSelectionViewModel GetPlannedDestinationFolder(FolderSelectionViewModel sourceFolder)

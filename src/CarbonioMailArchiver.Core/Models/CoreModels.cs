@@ -49,7 +49,9 @@ public sealed record MailDownloadProgress(
   string CurrentFolder,
   string CurrentFile,
   int DownloadedCount,
-  int TotalCount);
+  int TotalCount,
+  long BytesDownloaded,
+  TimeSpan Elapsed);
 
 public sealed record MailDownloadResult(
   bool IsSuccess,

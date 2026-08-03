@@ -2,6 +2,14 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.2] - 2026-08-03
+
+- Stabilizzate le metriche download EML e disabilitata la UI operativa durante le operazioni in corso.
+
+## [1.7.1] - In preparazione
+
+- Aggiunte metriche download EML con byte scaricati, velocita' media, tempo trascorso ed ETA.
+
 ## [1.7.0] - 2026-08-03
 
 - Aggiunto download EML della cartella di destinazione o dell'Archivio, con ricostruzione dell'albero locale sotto la casella.

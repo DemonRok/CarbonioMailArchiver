@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="{Binding WindowTitle}" Height="844" MinHeight="560" Width="1118" MinWidth="780">
+        Title="{Binding WindowTitle}" Height="866" MinHeight="580" Width="1118" MinWidth="780">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -26,7 +26,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="360">
+                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="360" IsEnabled="{Binding IsOperationIdle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
@@ -129,6 +129,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid Grid.ColumnSpan="2">
                             <ProgressBar Minimum="0"
@@ -152,9 +153,14 @@
                                    VerticalAlignment="Center"
                                    Foreground="#555"
                                    Margin="0,2,12,0" />
+                        <TextBlock Grid.Row="3"
+                                   Text="{Binding OperationMetricsText}"
+                                   VerticalAlignment="Center"
+                                   Foreground="#666"
+                                   Margin="0,2,12,0" />
                         <Button Grid.Row="1"
                                 Grid.Column="1"
-                                Grid.RowSpan="2"
+                                Grid.RowSpan="3"
                                 Content="Annulla"
                                 Command="{Binding CancelMoveCommand}"
                                 Width="96"
@@ -163,6 +169,7 @@
 
                     <DataGrid Grid.Row="2"
                               ItemsSource="{Binding PreviewMessages}"
+                              IsEnabled="{Binding IsOperationIdle}"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
                               CanUserAddRows="False"
@@ -184,7 +191,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Configurazione">
+            <TabItem Header="Configurazione" IsEnabled="{Binding IsOperationIdle}">
                 <Grid Margin="0,18,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="180" />
@@ -333,9 +340,9 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <Button Content="Aggiorna" Command="{Binding RefreshLogsCommand}" Width="96" Margin="0,0,12,0" />
-                        <Button Content="Copia tutto" Command="{Binding CopyLogsCommand}" Width="96" Margin="0,0,12,0" />
-                        <Button Content="Cancella log" Command="{Binding ClearLogsCommand}" Width="110" Margin="0,0,12,0" />
+                        <Button Content="Aggiorna" Command="{Binding RefreshLogsCommand}" Width="96" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
+                        <Button Content="Copia tutto" Command="{Binding CopyLogsCommand}" Width="96" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
+                        <Button Content="Cancella log" Command="{Binding ClearLogsCommand}" Width="110" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
                         <TextBlock Text="{Binding LogDirectory}" VerticalAlignment="Center" Foreground="#555" />
                     </StackPanel>
                     <TextBox Grid.Row="1"
@@ -351,7 +358,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Info">
+            <TabItem Header="Info" IsEnabled="{Binding IsOperationIdle}">
                 <Grid Margin="0,18,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="150" />

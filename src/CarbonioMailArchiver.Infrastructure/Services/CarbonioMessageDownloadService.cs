@@ -47,11 +47,13 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       .ToArray();
     var messagesByFolder = new Dictionary<string, IReadOnlyList<MailMessageSummary>>(StringComparer.Ordinal);
     var totalCount = 0;
+    var operationStopwatch = Stopwatch.StartNew();
+    long totalBytesDownloaded = 0;
 
     foreach (var folder in folders)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", totalCount, 0));
+      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", totalCount, 0, totalBytesDownloaded, operationStopwatch.Elapsed));
       var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
       messagesByFolder[folder.Id] = messages;
       totalCount += messages.Count;
@@ -69,7 +71,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
         cancellationToken.ThrowIfCancellationRequested();
         var fileName = BuildMessageFileName(message);
         var filePath = EnsureUniqueFilePath(Path.Combine(folderDirectory, fileName));
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount));
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
 
         using var response = await client.GetRawMessageAsync(message.Id, cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -81,9 +83,18 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var destination = File.Create(filePath);
-        await CopyToAsync(source, destination, speedLimitKbps, cancellationToken);
+        await CopyToAsync(
+          source,
+          destination,
+          speedLimitKbps,
+          bytesCopied =>
+          {
+            totalBytesDownloaded += bytesCopied;
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          },
+          cancellationToken);
         downloadedCount++;
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount));
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
       }
     }
 
@@ -201,13 +212,27 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     return new MailMessageSummary(id, date, string.Empty, subject, size, folderId);
   }
 
-  private static async Task CopyToAsync(Stream source, Stream destination, int speedLimitKbps, CancellationToken cancellationToken)
+  private static async Task CopyToAsync(
+    Stream source,
+    Stream destination,
+    int speedLimitKbps,
+    Action<int> reportBytesCopied,
+    CancellationToken cancellationToken)
   {
     var buffer = new byte[CopyBufferSize];
     if (speedLimitKbps <= 0)
     {
-      await source.CopyToAsync(destination, buffer.Length, cancellationToken);
-      return;
+      while (true)
+      {
+        var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+        if (read == 0)
+        {
+          return;
+        }
+
+        await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        reportBytesCopied(read);
+      }
     }
 
     var bytesPerSecond = speedLimitKbps * 1024d;
@@ -224,6 +249,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
       await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
       copiedBytes += read;
+      reportBytesCopied(read);
       var expectedElapsed = TimeSpan.FromSeconds(copiedBytes / bytesPerSecond);
       var delay = expectedElapsed - stopwatch.Elapsed;
       if (delay > TimeSpan.FromMilliseconds(20))
