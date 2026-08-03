@@ -45,6 +45,19 @@ public interface IMoveDiagnosticService
   Task<MailMoveResult> MoveMessagesAsync(CarbonioConnectionSettings settings, string password, IReadOnlyList<string> messageIds, string destinationFolderId, CancellationToken cancellationToken);
 }
 
+public interface IMessageDownloadService
+{
+  Task<MailDownloadResult> DownloadFolderTreeAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    MailFolder rootFolder,
+    IReadOnlyList<MailFolder> foldersToDownload,
+    string downloadRootDirectory,
+    int speedLimitKbps,
+    IProgress<MailDownloadProgress>? progress,
+    CancellationToken cancellationToken);
+}
+
 public interface IMailSearchService
 {
   Task<MailSearchResult> SearchAsync(CarbonioSession session, MailSearchRequest request, CancellationToken cancellationToken);

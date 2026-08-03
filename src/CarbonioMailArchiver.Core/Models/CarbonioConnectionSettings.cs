@@ -19,4 +19,6 @@ public sealed class CarbonioConnectionSettings
   public int MaxMessagesToMove { get; set; }
   public string SearchBeforeDate { get; set; } = string.Empty;
   public bool PromptReportExportAfterMove { get; set; } = true;
+  public string DownloadRootDirectory { get; set; } = string.Empty;
+  public int DownloadSpeedLimitKbps { get; set; }
 }

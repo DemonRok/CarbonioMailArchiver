@@ -1,10 +1,14 @@
 <Project>
   <PropertyGroup>
-    <BuildVersion>1.6.1</BuildVersion>
+    <BuildVersion>1.7.0</BuildVersion>
     <Version>$(BuildVersion)</Version>
     <AssemblyVersion>$(BuildVersion).0</AssemblyVersion>
     <FileVersion>$(BuildVersion).0</FileVersion>
     <InformationalVersion>$(BuildVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 </Project>

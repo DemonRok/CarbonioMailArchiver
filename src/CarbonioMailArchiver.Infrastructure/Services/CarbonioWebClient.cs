@@ -165,6 +165,26 @@ internal sealed class CarbonioWebClient : IDisposable
     return PostSoapJsonAsync("MsgActionRequest", payload, cancellationToken);
   }
 
+  public async Task<HttpResponseMessage> GetRawMessageAsync(string messageId, CancellationToken cancellationToken)
+  {
+    var escapedMessageId = Uri.EscapeDataString(messageId);
+    var accountPath = Uri.EscapeDataString(_account);
+    var response = await _httpClient.GetAsync(
+      $"/home/{accountPath}/?id={escapedMessageId}&fmt=raw",
+      HttpCompletionOption.ResponseHeadersRead,
+      cancellationToken);
+    if (response.IsSuccessStatusCode)
+    {
+      return response;
+    }
+
+    response.Dispose();
+    return await _httpClient.GetAsync(
+      $"/service/home/~/?id={escapedMessageId}&fmt=raw",
+      HttpCompletionOption.ResponseHeadersRead,
+      cancellationToken);
+  }
+
   public void Dispose()
   {
     _httpClient.Dispose();

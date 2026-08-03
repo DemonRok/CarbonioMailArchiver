@@ -23,6 +23,7 @@ public static class DependencyInjection
     services.AddSingleton<IArchiveFolderService, CarbonioArchiveFolderService>();
     services.AddSingleton<IFolderMaintenanceService, CarbonioFolderMaintenanceService>();
     services.AddSingleton<IMoveDiagnosticService, CarbonioMoveDiagnosticService>();
+    services.AddSingleton<IMessageDownloadService, CarbonioMessageDownloadService>();
     services.AddSingleton<IMailSearchService, PhaseBPendingMailSearchService>();
     services.AddSingleton<IMailMoveService, PhaseBPendingMailMoveService>();
     services.AddSingleton<IFolderService, PhaseBPendingFolderService>();

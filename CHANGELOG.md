@@ -2,6 +2,14 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.0] - 2026-08-03
+
+- Aggiunto download EML della cartella di destinazione o dell'Archivio, con ricostruzione dell'albero locale sotto la casella.
+- Aggiunto limite opzionale di velocita' download in KB/s, con 0 come valore senza limiti.
+- Aggiunta configurazione della cartella locale di download.
+- Escluso il segmento `/Archive` dal percorso locale quando si scarica l'Archivio.
+- Migliorata la gestione dell'annullamento download e della fase di conteggio iniziale.
+
 ## [1.6.1] - In preparazione
 
 - Aggiunta conferma finale con pulsante OK al termine degli spostamenti completati.

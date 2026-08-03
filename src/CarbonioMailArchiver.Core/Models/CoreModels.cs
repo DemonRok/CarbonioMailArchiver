@@ -45,6 +45,18 @@ public sealed record FolderDeletePlanResult(bool IsSuccess, string Message, IRea
 
 public sealed record FolderDeleteResult(bool IsSuccess, string Message, int MovedToTrashCount);
 
+public sealed record MailDownloadProgress(
+  string CurrentFolder,
+  string CurrentFile,
+  int DownloadedCount,
+  int TotalCount);
+
+public sealed record MailDownloadResult(
+  bool IsSuccess,
+  string Message,
+  int DownloadedCount,
+  string TargetDirectory);
+
 public enum ArchiveOperationMode
 {
   Analysis,

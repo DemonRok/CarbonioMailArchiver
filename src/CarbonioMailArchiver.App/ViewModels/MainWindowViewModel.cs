@@ -6,6 +6,7 @@ using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using CarbonioMailArchiver.Core.Abstractions;
@@ -27,6 +28,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly IArchiveFolderService _archiveFolderService;
   private readonly IFolderMaintenanceService _folderMaintenanceService;
   private readonly IMoveDiagnosticService _moveDiagnosticService;
+  private readonly IMessageDownloadService _messageDownloadService;
   private readonly IOperationReportService _operationReportService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
@@ -47,6 +49,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _useArchiveDestination;
   private bool _includeSourceSubfolders;
   private bool _promptReportExportAfterMove = true;
+  private string _downloadRootDirectory = string.Empty;
+  private int _downloadSpeedLimitKbps;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -84,6 +88,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IArchiveFolderService archiveFolderService,
     IFolderMaintenanceService folderMaintenanceService,
     IMoveDiagnosticService moveDiagnosticService,
+    IMessageDownloadService messageDownloadService,
     IOperationReportService operationReportService,
     ILogger<MainWindowViewModel> logger)
   {
@@ -96,6 +101,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _archiveFolderService = archiveFolderService;
     _folderMaintenanceService = folderMaintenanceService;
     _moveDiagnosticService = moveDiagnosticService;
+    _messageDownloadService = messageDownloadService;
     _operationReportService = operationReportService;
     _logger = logger;
 
@@ -110,6 +116,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _cancelMoveCommand = new AsyncRelayCommand(CancelMoveAsync, () => IsMoveInProgress);
     MoveAllSearchResultsCommand = _moveAllSearchResultsCommand;
     CancelMoveCommand = _cancelMoveCommand;
+    DownloadMessagesCommand = new AsyncRelayCommand(DownloadMessagesAsync, () => !IsMoveInProgress);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -138,6 +145,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand MovePreviewCommand { get; }
   public ICommand MoveAllSearchResultsCommand { get; }
   public ICommand CancelMoveCommand { get; }
+  public ICommand DownloadMessagesCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -158,11 +166,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand IncreaseBatchSizeCommand => new AsyncRelayCommand(() => UpdateBatchSizeAsync(1));
   public ICommand DecreaseMaxMessagesToMoveCommand => new AsyncRelayCommand(() => UpdateMaxMessagesToMoveAsync(-1));
   public ICommand IncreaseMaxMessagesToMoveCommand => new AsyncRelayCommand(() => UpdateMaxMessagesToMoveAsync(1));
+  public ICommand DecreaseDownloadSpeedLimitCommand => new AsyncRelayCommand(() => UpdateDownloadSpeedLimitAsync(-256));
+  public ICommand IncreaseDownloadSpeedLimitCommand => new AsyncRelayCommand(() => UpdateDownloadSpeedLimitAsync(256));
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public string LogDirectory { get; }
   public string ReportDirectory => _operationReportService.ReportDirectory;
+  public string DefaultDownloadDirectory => Path.Combine(ExecutableDirectory, "Downloads");
   public string ApplicationDirectory => _configuration.ApplicationDirectory;
   public string ConfigurationPath => _configuration.SettingsPath;
   public string ExecutableDirectory
@@ -299,6 +310,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _promptReportExportAfterMove, value);
   }
 
+  public string DownloadRootDirectory
+  {
+    get => _downloadRootDirectory;
+    set => SetField(ref _downloadRootDirectory, value);
+  }
+
   public int TimeoutSeconds
   {
     get => _timeoutSeconds;
@@ -323,6 +340,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _maxMessagesToMove, Math.Max(value, 0));
   }
 
+  public int DownloadSpeedLimitKbps
+  {
+    get => _downloadSpeedLimitKbps;
+    set => SetField(ref _downloadSpeedLimitKbps, Math.Clamp(value, 0, 10240));
+  }
+
   public bool IsMoveInProgress
   {
     get => _isMoveInProgress;
@@ -331,6 +354,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       SetField(ref _isMoveInProgress, value);
       _moveAllSearchResultsCommand.RaiseCanExecuteChanged();
       _cancelMoveCommand.RaiseCanExecuteChanged();
+      if (DownloadMessagesCommand is AsyncRelayCommand downloadCommand)
+      {
+        downloadCommand.RaiseCanExecuteChanged();
+      }
     }
   }
 
@@ -405,6 +432,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
     BatchSize = Math.Clamp(settings.BatchSize, 10, 100);
     MaxMessagesToMove = Math.Max(settings.MaxMessagesToMove, 0);
+    DownloadRootDirectory = string.IsNullOrWhiteSpace(settings.DownloadRootDirectory)
+      ? DefaultDownloadDirectory
+      : settings.DownloadRootDirectory;
+    DownloadSpeedLimitKbps = Math.Clamp(settings.DownloadSpeedLimitKbps, 0, 10240);
     if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
     {
       SearchBeforeDate = savedSearchBeforeDate;
@@ -878,12 +909,149 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private Task CancelMoveAsync()
   {
     _moveCancellationTokenSource?.Cancel();
-    StatusMessage = "Annullamento richiesto. Attendo il completamento del batch corrente...";
+    StatusMessage = "Annullamento richiesto. Attendo il completamento dell'operazione corrente...";
     MoveProgressText = "Annullamento richiesto...";
     MoveBatchText = "Annullamento richiesto";
-    MoveDetailText = "Attendo il completamento del batch corrente...";
+    MoveDetailText = "Attendo il completamento dell'operazione corrente...";
     IsMoveProgressIndeterminate = false;
     return Task.CompletedTask;
+  }
+
+  private async Task DownloadMessagesAsync()
+  {
+    if (IsMoveInProgress)
+    {
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    if (AvailableFolders.Count == 0)
+    {
+      await LoadFoldersAsync();
+    }
+
+    var rootFolder = ResolveDownloadRootFolder();
+    if (rootFolder is null)
+    {
+      StatusMessage = UseArchiveDestination
+        ? "Cartella /Archive non trovata. Carica le cartelle e verifica che Archivio sia attivo sul server."
+        : "Seleziona una cartella destinazione da scaricare, oppure abilita Archivio.";
+      return;
+    }
+
+    var foldersToDownload = GetFoldersUnder(rootFolder).ToArray();
+    if (foldersToDownload.Length == 0)
+    {
+      StatusMessage = $"Nessuna cartella da scaricare per {rootFolder.AbsolutePath}.";
+      return;
+    }
+
+    await SaveSettingsSnapshotAsync();
+    var password = await GetPasswordAsync(settings);
+    var speedText = DownloadSpeedLimitKbps == 0
+      ? "senza limite di velocita'"
+      : $"{DownloadSpeedLimitKbps.ToString(CultureInfo.InvariantCulture)} KB/s";
+    var confirmation = MessageBox.Show(
+      $"Scaricare in formato EML la cartella {rootFolder.AbsolutePath} e le sue sottocartelle?\n\nCartelle da scandire: {foldersToDownload.Length}\nDestinazione locale: {settings.DownloadRootDirectory}\\{settings.Email}\nVelocita': {speedText}",
+      "Conferma download EML",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Question,
+      MessageBoxResult.No);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      StatusMessage = "Download EML annullato.";
+      return;
+    }
+
+    using var downloadCancellation = new CancellationTokenSource();
+    _moveCancellationTokenSource = downloadCancellation;
+    IsMoveInProgress = true;
+    MoveProgressPercentage = 0;
+    MoveProgressPercentText = string.Empty;
+    MoveBatchText = "Download EML";
+    MoveDetailText = $"Conteggio messaggi in {rootFolder.AbsolutePath}...";
+    MoveProgressText = MoveDetailText;
+    IsMoveProgressIndeterminate = true;
+    StatusMessage = MoveDetailText;
+
+    var progress = new Progress<MailDownloadProgress>(downloadProgress =>
+    {
+      if (downloadProgress.TotalCount <= 0)
+      {
+        IsMoveProgressIndeterminate = true;
+        MoveProgressPercentText = string.Empty;
+        MoveProgressPercentage = 0;
+        MoveDetailText = $"{downloadProgress.CurrentFolder}: {downloadProgress.CurrentFile}";
+      }
+      else
+      {
+        IsMoveProgressIndeterminate = false;
+        MoveProgressPercentage = Math.Clamp((int)Math.Round(downloadProgress.DownloadedCount * 100d / downloadProgress.TotalCount), 0, 100);
+        MoveProgressPercentText = $"{MoveProgressPercentage}%";
+        MoveDetailText = $"{downloadProgress.CurrentFolder}: {downloadProgress.DownloadedCount}/{downloadProgress.TotalCount} messaggi scaricati. {downloadProgress.CurrentFile}";
+      }
+
+      MoveBatchText = "Download EML";
+      MoveProgressText = MoveDetailText;
+      StatusMessage = MoveDetailText;
+    });
+
+    try
+    {
+      var result = await _messageDownloadService.DownloadFolderTreeAsync(
+        settings,
+        password,
+        ToMailFolder(rootFolder),
+        foldersToDownload.Select(ToMailFolder).ToArray(),
+        settings.DownloadRootDirectory,
+        settings.DownloadSpeedLimitKbps,
+        progress,
+        downloadCancellation.Token);
+
+      if (!result.IsSuccess)
+      {
+        StatusMessage = result.Message;
+        await RefreshLogsAsync();
+        return;
+      }
+
+      MoveProgressPercentage = 100;
+      MoveProgressPercentText = "100%";
+      IsMoveProgressIndeterminate = false;
+      MoveBatchText = "Download completato";
+      MoveDetailText = $"{result.DownloadedCount} messaggi scaricati in {result.TargetDirectory}.";
+      MoveProgressText = MoveDetailText;
+      StatusMessage = result.Message;
+      await RefreshLogsAsync();
+      MessageBox.Show(
+        "Download EML completato.",
+        "Download completato",
+        MessageBoxButton.OK,
+        MessageBoxImage.Information);
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = "Download EML annullato dall'utente.";
+      ResetMoveProgress();
+      await RefreshLogsAsync();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or TaskCanceledException)
+    {
+      StatusMessage = $"Download EML non completato: {ex.Message}";
+      await RefreshLogsAsync();
+    }
+    finally
+    {
+      IsMoveInProgress = false;
+      _moveCancellationTokenSource = null;
+    }
   }
 
   private async Task<IReadOnlyList<SourceFolderScan>> ScanSourceFoldersAsync(
@@ -956,6 +1124,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       .Where(folder => folder.Id == sourceFolder.Id || folder.AbsolutePath.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
       .ToArray();
+  }
+
+  private FolderSelectionViewModel? ResolveDownloadRootFolder()
+  {
+    if (UseArchiveDestination)
+    {
+      return AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/Archive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    return SelectedDestinationFolder;
+  }
+
+  private IEnumerable<FolderSelectionViewModel> GetFoldersUnder(FolderSelectionViewModel rootFolder)
+  {
+    var rootPrefix = rootFolder.AbsolutePath.TrimEnd('/') + "/";
+    return AvailableFolders
+      .Where(folder => folder.Id == rootFolder.Id || folder.AbsolutePath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase);
   }
 
   private async Task<(bool IsSuccess, string Message, IReadOnlyList<string> MessageIds)> ScanMessageIdsAsync(
@@ -1207,6 +1393,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return Task.CompletedTask;
   }
 
+  private Task UpdateDownloadSpeedLimitAsync(int delta)
+  {
+    DownloadSpeedLimitKbps = Math.Clamp(DownloadSpeedLimitKbps + delta, 0, 10240);
+    return Task.CompletedTask;
+  }
+
   private Task RestoreConfigurationDefaultsAsync()
   {
     TimeoutSeconds = 100;
@@ -1218,6 +1410,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IncludeSourceSubfolders = false;
     DiagnosticSoapLoggingEnabled = false;
     PromptReportExportAfterMove = true;
+    DownloadRootDirectory = DefaultDownloadDirectory;
+    DownloadSpeedLimitKbps = 0;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
     return Task.CompletedTask;
   }
@@ -1290,6 +1484,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       BatchSize = Math.Clamp(BatchSize, 10, 100),
       MaxMessagesToMove = Math.Max(MaxMessagesToMove, 0),
       PromptReportExportAfterMove = PromptReportExportAfterMove,
+      DownloadRootDirectory = string.IsNullOrWhiteSpace(DownloadRootDirectory) ? DefaultDownloadDirectory : DownloadRootDirectory.Trim(),
+      DownloadSpeedLimitKbps = Math.Clamp(DownloadSpeedLimitKbps, 0, 10240),
       SearchBeforeDate = TryParseSearchBeforeDate(out var beforeDate) ? beforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : SearchBeforeDate.Trim()
     };
   }
