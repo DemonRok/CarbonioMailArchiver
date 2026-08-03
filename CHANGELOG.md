@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.4] - 2026-08-03
+
+- Impostata sui file EML scaricati la data effettiva del messaggio quando disponibile.
+
 ## [1.7.3] - 2026-08-03
 
 - Corretto il percorso locale del download EML salvando solo il contenuto della cartella selezionata.

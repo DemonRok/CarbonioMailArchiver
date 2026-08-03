@@ -107,6 +107,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
             progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
           },
           cancellationToken);
+        ApplyMessageFileTimestamps(filePath, message.Date);
         downloadedCount++;
         progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
       }
@@ -182,6 +183,11 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     return string.IsNullOrWhiteSpace(sanitized) ? "_" : sanitized;
   }
 
+  internal static DateTime? ToLocalFileTimestamp(DateTimeOffset? messageDate)
+  {
+    return messageDate?.LocalDateTime;
+  }
+
   private static async Task<IReadOnlyList<MailMessageSummary>> SearchAllMessagesAsync(
     CarbonioWebClient client,
     MailFolder folder,
@@ -217,6 +223,19 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
       offset += SearchPageSize;
     }
+  }
+
+  private static void ApplyMessageFileTimestamps(string filePath, DateTimeOffset? messageDate)
+  {
+    var timestamp = ToLocalFileTimestamp(messageDate);
+    if (timestamp is null)
+    {
+      return;
+    }
+
+    File.SetCreationTime(filePath, timestamp.Value);
+    File.SetLastWriteTime(filePath, timestamp.Value);
+    File.SetLastAccessTime(filePath, timestamp.Value);
   }
 
   private static MailSearchResult ParseSearchResult(string json)

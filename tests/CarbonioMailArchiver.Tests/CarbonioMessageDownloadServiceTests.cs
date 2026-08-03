@@ -51,4 +51,14 @@ public sealed class CarbonioMessageDownloadServiceTests
   {
     Assert.Equal(expected, CarbonioMessageDownloadService.SanitizePathSegment(value));
   }
+
+  [Fact]
+  public void ToLocalFileTimestamp_UsesMessageDateWhenAvailable()
+  {
+    var messageDate = new DateTimeOffset(2026, 7, 15, 10, 30, 0, TimeSpan.Zero);
+
+    var result = CarbonioMessageDownloadService.ToLocalFileTimestamp(messageDate);
+
+    Assert.Equal(messageDate.LocalDateTime, result);
+  }
 }
