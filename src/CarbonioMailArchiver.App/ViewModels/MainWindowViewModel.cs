@@ -52,6 +52,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _promptReportExportAfterMove = true;
   private string _downloadRootDirectory = string.Empty;
   private int _downloadSpeedLimitKbps;
+  private int _downloadRetryCount = 3;
+  private int _downloadRetryDelaySeconds = 10;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -177,6 +179,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand IncreaseMaxMessagesToMoveCommand => new AsyncRelayCommand(() => UpdateMaxMessagesToMoveAsync(1));
   public ICommand DecreaseDownloadSpeedLimitCommand => new AsyncRelayCommand(() => UpdateDownloadSpeedLimitAsync(-256));
   public ICommand IncreaseDownloadSpeedLimitCommand => new AsyncRelayCommand(() => UpdateDownloadSpeedLimitAsync(256));
+  public ICommand DecreaseDownloadRetryCountCommand => new AsyncRelayCommand(() => UpdateDownloadRetryCountAsync(-1));
+  public ICommand IncreaseDownloadRetryCountCommand => new AsyncRelayCommand(() => UpdateDownloadRetryCountAsync(1));
+  public ICommand DecreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(-1));
+  public ICommand IncreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(1));
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
@@ -355,6 +361,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _downloadSpeedLimitKbps, Math.Clamp(value, 0, 10240));
   }
 
+  public int DownloadRetryCount
+  {
+    get => _downloadRetryCount;
+    set => SetField(ref _downloadRetryCount, Math.Clamp(value, 1, 10));
+  }
+
+  public int DownloadRetryDelaySeconds
+  {
+    get => _downloadRetryDelaySeconds;
+    set => SetField(ref _downloadRetryDelaySeconds, Math.Clamp(value, 1, 300));
+  }
+
   public bool IsMoveInProgress
   {
     get => _isMoveInProgress;
@@ -454,6 +472,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       ? DefaultDownloadDirectory
       : settings.DownloadRootDirectory;
     DownloadSpeedLimitKbps = Math.Clamp(settings.DownloadSpeedLimitKbps, 0, 10240);
+    DownloadRetryCount = Math.Clamp(settings.DownloadRetryCount, 1, 10);
+    DownloadRetryDelaySeconds = Math.Clamp(settings.DownloadRetryDelaySeconds, 1, 300);
     if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
     {
       SearchBeforeDate = savedSearchBeforeDate;
@@ -1037,6 +1057,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         foldersToDownload.Select(ToMailFolder).ToArray(),
         settings.DownloadRootDirectory,
         settings.DownloadSpeedLimitKbps,
+        settings.DownloadRetryCount,
+        settings.DownloadRetryDelaySeconds,
         progress,
         downloadCancellation.Token);
 
@@ -1051,7 +1073,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveProgressPercentText = "100%";
       IsMoveProgressIndeterminate = false;
       MoveBatchText = "Download completato";
-      MoveDetailText = $"{result.DownloadedCount} messaggi scaricati in {result.TargetDirectory}.";
+      MoveDetailText = $"{result.DownloadedCount} messaggi completati in {result.TargetDirectory}.";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
       MoveProgressText = MoveDetailText;
@@ -1065,6 +1087,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
     catch (OperationCanceledException)
     {
+      _logger.LogWarning("Download EML annullato per {Account}.", settings.Email);
       StatusMessage = "Download EML annullato dall'utente.";
       StopDownloadMetricsTimer();
       ResetMoveProgress();
@@ -1072,6 +1095,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or TaskCanceledException)
     {
+      _logger.LogWarning(ex, "Download EML non completato per {Account}.", settings.Email);
       StatusMessage = $"Download EML non completato: {ex.Message}";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
@@ -1430,6 +1454,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return Task.CompletedTask;
   }
 
+  private Task UpdateDownloadRetryCountAsync(int delta)
+  {
+    DownloadRetryCount = Math.Clamp(DownloadRetryCount + delta, 1, 10);
+    return Task.CompletedTask;
+  }
+
+  private Task UpdateDownloadRetryDelayAsync(int delta)
+  {
+    DownloadRetryDelaySeconds = Math.Clamp(DownloadRetryDelaySeconds + delta, 1, 300);
+    return Task.CompletedTask;
+  }
+
   private Task RestoreConfigurationDefaultsAsync()
   {
     TimeoutSeconds = 100;
@@ -1443,6 +1479,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     PromptReportExportAfterMove = true;
     DownloadRootDirectory = DefaultDownloadDirectory;
     DownloadSpeedLimitKbps = 0;
+    DownloadRetryCount = 3;
+    DownloadRetryDelaySeconds = 10;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
     return Task.CompletedTask;
   }
@@ -1517,6 +1555,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       PromptReportExportAfterMove = PromptReportExportAfterMove,
       DownloadRootDirectory = string.IsNullOrWhiteSpace(DownloadRootDirectory) ? DefaultDownloadDirectory : DownloadRootDirectory.Trim(),
       DownloadSpeedLimitKbps = Math.Clamp(DownloadSpeedLimitKbps, 0, 10240),
+      DownloadRetryCount = Math.Clamp(DownloadRetryCount, 1, 10),
+      DownloadRetryDelaySeconds = Math.Clamp(DownloadRetryDelaySeconds, 1, 300),
       SearchBeforeDate = TryParseSearchBeforeDate(out var beforeDate) ? beforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : SearchBeforeDate.Trim()
     };
   }

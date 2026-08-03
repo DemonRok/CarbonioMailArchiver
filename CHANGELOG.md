@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.7.5] - 2026-08-03
+
+- Aggiunti retry sul download dei singoli EML in caso di timeout o errori HTTP temporanei.
+- Aggiunto resume del download EML saltando i file gia' presenti e usando file temporanei `.download`.
+
 ## [1.7.4] - 2026-08-03
 
 - Impostata sui file EML scaricati la data effettiva del messaggio quando disponibile.

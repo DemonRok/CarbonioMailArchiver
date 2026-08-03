@@ -54,6 +54,8 @@ public interface IMessageDownloadService
     IReadOnlyList<MailFolder> foldersToDownload,
     string downloadRootDirectory,
     int speedLimitKbps,
+    int retryCount,
+    int retryDelaySeconds,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken);
 }

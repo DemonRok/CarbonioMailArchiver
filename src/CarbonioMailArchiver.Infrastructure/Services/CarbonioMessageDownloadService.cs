@@ -19,6 +19,8 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     IReadOnlyList<MailFolder> foldersToDownload,
     string downloadRootDirectory,
     int speedLimitKbps,
+    int retryCount,
+    int retryDelaySeconds,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken)
   {
@@ -36,26 +38,6 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     }
 
     var targetDirectory = Path.Combine(downloadRootDirectory, SanitizePathSegment(settings.Email));
-    var rootLocalDirectory = BuildLocalFolderDirectory(targetDirectory, rootFolder.AbsolutePath, rootFolder.AbsolutePath);
-    if (Directory.Exists(rootLocalDirectory))
-    {
-      Directory.Delete(rootLocalDirectory, recursive: true);
-    }
-
-    var legacySelectedRootDirectory = BuildLegacyLocalFolderDirectory(targetDirectory, rootFolder.AbsolutePath);
-    if (!string.Equals(legacySelectedRootDirectory, rootLocalDirectory, StringComparison.OrdinalIgnoreCase)
-      && Directory.Exists(legacySelectedRootDirectory))
-    {
-      Directory.Delete(legacySelectedRootDirectory, recursive: true);
-    }
-
-    var legacyArchiveDirectory = Path.Combine(targetDirectory, "Archive");
-    if (rootFolder.AbsolutePath.StartsWith("/Archive", StringComparison.OrdinalIgnoreCase)
-      && Directory.Exists(legacyArchiveDirectory))
-    {
-      Directory.Delete(legacyArchiveDirectory, recursive: true);
-    }
-
     var folders = foldersToDownload
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
       .ToArray();
@@ -63,6 +45,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var totalCount = 0;
     var operationStopwatch = Stopwatch.StartNew();
     long totalBytesDownloaded = 0;
+    var skippedCount = 0;
 
     foreach (var folder in folders)
     {
@@ -84,41 +67,48 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       {
         cancellationToken.ThrowIfCancellationRequested();
         var fileName = BuildMessageFileName(message);
-        var filePath = EnsureUniqueFilePath(Path.Combine(folderDirectory, fileName));
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-
-        using var response = await client.GetRawMessageAsync(message.Id, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var filePath = Path.Combine(folderDirectory, fileName);
+        if (File.Exists(filePath))
         {
-          var statusMessage = $"Download EML fallito per messaggio {message.Id}: HTTP {(int)response.StatusCode}.";
-          logger.LogWarning("{Message}", statusMessage);
-          return new MailDownloadResult(false, statusMessage, downloadedCount, targetDirectory);
+          skippedCount++;
+          downloadedCount++;
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          continue;
         }
 
-        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var destination = File.Create(filePath);
-        await CopyToAsync(
-          source,
-          destination,
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        var download = await DownloadMessageWithRetryAsync(
+          client,
+          message,
+          folder.AbsolutePath,
+          filePath,
           speedLimitKbps,
+          retryCount,
+          retryDelaySeconds,
           bytesCopied =>
           {
             totalBytesDownloaded += bytesCopied;
             progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
           },
           cancellationToken);
-        ApplyMessageFileTimestamps(filePath, message.Date);
+        if (!download.IsSuccess)
+        {
+          return new MailDownloadResult(false, download.Message, downloadedCount, targetDirectory);
+        }
+
         downloadedCount++;
         progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), downloadedCount, totalCount, totalBytesDownloaded, operationStopwatch.Elapsed));
       }
     }
 
     logger.LogInformation(
-      "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi scaricati: {Count}.",
+      "Download EML completato per {Account}. Cartella radice: {RootFolder}. Messaggi completati: {Count}. Saltati per resume: {SkippedCount}.",
       settings.Email,
       rootFolder.AbsolutePath,
-      downloadedCount);
-    return new MailDownloadResult(true, $"Download EML completato. Messaggi scaricati: {downloadedCount}.", downloadedCount, targetDirectory);
+      downloadedCount,
+      skippedCount);
+    var skippedMessage = skippedCount == 0 ? string.Empty : $" Gia' presenti saltati: {skippedCount}.";
+    return new MailDownloadResult(true, $"Download EML completato. Messaggi completati: {downloadedCount}.{skippedMessage}", downloadedCount, targetDirectory);
   }
 
   internal static string BuildLocalFolderDirectory(string accountDirectory, string folderPath, string rootFolderPath)
@@ -158,18 +148,6 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     return normalizedFolderPath.TrimStart('/');
   }
 
-  private static string BuildLegacyLocalFolderDirectory(string accountDirectory, string folderPath)
-  {
-    var relativeParts = NormalizeFolderPath(folderPath)
-      .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-      .Select(SanitizePathSegment)
-      .Where(part => !string.IsNullOrWhiteSpace(part))
-      .ToArray();
-    return relativeParts.Length == 0
-      ? accountDirectory
-      : Path.Combine([accountDirectory, .. relativeParts]);
-  }
-
   private static string NormalizeFolderPath(string folderPath)
   {
     var normalized = "/" + folderPath.Trim().Trim('/');
@@ -186,6 +164,11 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
   internal static DateTime? ToLocalFileTimestamp(DateTimeOffset? messageDate)
   {
     return messageDate?.LocalDateTime;
+  }
+
+  internal static string BuildTemporaryFilePath(string filePath)
+  {
+    return $"{filePath}.download";
   }
 
   private static async Task<IReadOnlyList<MailMessageSummary>> SearchAllMessagesAsync(
@@ -236,6 +219,100 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     File.SetCreationTime(filePath, timestamp.Value);
     File.SetLastWriteTime(filePath, timestamp.Value);
     File.SetLastAccessTime(filePath, timestamp.Value);
+  }
+
+  private static void DeleteTemporaryFileIfExists(string tempFilePath)
+  {
+    if (File.Exists(tempFilePath))
+    {
+      File.Delete(tempFilePath);
+    }
+  }
+
+  private async Task<(bool IsSuccess, string Message)> DownloadMessageWithRetryAsync(
+    CarbonioWebClient client,
+    MailMessageSummary message,
+    string folderPath,
+    string filePath,
+    int speedLimitKbps,
+    int retryCount,
+    int retryDelaySeconds,
+    Action<int> reportBytesCopied,
+    CancellationToken cancellationToken)
+  {
+    var tempFilePath = BuildTemporaryFilePath(filePath);
+    var maxAttempts = Math.Clamp(retryCount, 1, 10);
+    var retryDelay = Math.Clamp(retryDelaySeconds, 1, 300);
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      try
+      {
+        DeleteTemporaryFileIfExists(tempFilePath);
+        using var response = await client.GetRawMessageAsync(message.Id, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+          var statusMessage = $"Download EML fallito per messaggio {message.Id}: HTTP {(int)response.StatusCode}.";
+          if (!IsTransientStatusCode((int)response.StatusCode) || attempt == maxAttempts)
+          {
+            logger.LogWarning("{Message} Cartella: {FolderPath}. Tentativo: {Attempt}/{MaxAttempts}.", statusMessage, folderPath, attempt, maxAttempts);
+            return (false, statusMessage);
+          }
+
+          logger.LogWarning(
+            "{Message} Cartella: {FolderPath}. Retry {Attempt}/{MaxAttempts}.",
+            statusMessage,
+            folderPath,
+            attempt,
+            maxAttempts);
+          await DelayBeforeRetryAsync(attempt, retryDelay, cancellationToken);
+          continue;
+        }
+
+        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var destination = File.Create(tempFilePath);
+        await CopyToAsync(source, destination, speedLimitKbps, reportBytesCopied, cancellationToken);
+        ApplyMessageFileTimestamps(tempFilePath, message.Date);
+        File.Move(tempFilePath, filePath);
+        return (true, string.Empty);
+      }
+      catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+      {
+        DeleteTemporaryFileIfExists(tempFilePath);
+        if (cancellationToken.IsCancellationRequested)
+        {
+          throw;
+        }
+
+        if (attempt == maxAttempts)
+        {
+          var errorMessage = $"Download EML fallito per messaggio {message.Id} dopo {maxAttempts} tentativi: {ex.Message}";
+          logger.LogWarning(ex, "{Message} Cartella: {FolderPath}.", errorMessage, folderPath);
+          return (false, errorMessage);
+        }
+
+        logger.LogWarning(
+          ex,
+          "Download EML fallito per messaggio {MessageId} in {FolderPath}. Retry {Attempt}/{MaxAttempts}.",
+          message.Id,
+          folderPath,
+          attempt,
+          maxAttempts);
+        await DelayBeforeRetryAsync(attempt, retryDelay, cancellationToken);
+      }
+    }
+
+    return (false, $"Download EML fallito per messaggio {message.Id}.");
+  }
+
+  private static bool IsTransientStatusCode(int statusCode)
+  {
+    return statusCode is 408 or 429 or >= 500;
+  }
+
+  private static Task DelayBeforeRetryAsync(int attempt, int retryDelaySeconds, CancellationToken cancellationToken)
+  {
+    return Task.Delay(TimeSpan.FromSeconds(attempt * retryDelaySeconds), cancellationToken);
   }
 
   private static MailSearchResult ParseSearchResult(string json)
@@ -326,28 +403,6 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
   {
     var datePrefix = message.Date?.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) ?? "nodate";
     return SanitizePathSegment($"{datePrefix}_{message.Id}.eml");
-  }
-
-  private static string EnsureUniqueFilePath(string filePath)
-  {
-    if (!File.Exists(filePath))
-    {
-      return filePath;
-    }
-
-    var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
-    var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
-    var extension = Path.GetExtension(filePath);
-    for (var index = 1; index < int.MaxValue; index++)
-    {
-      var candidate = Path.Combine(directory, $"{fileNameWithoutExtension}_{index}{extension}");
-      if (!File.Exists(candidate))
-      {
-        return candidate;
-      }
-    }
-
-    throw new IOException($"Impossibile creare un nome file univoco per {filePath}.");
   }
 
   private static bool TryFindProperty(JsonElement element, string propertyName, out JsonElement value)

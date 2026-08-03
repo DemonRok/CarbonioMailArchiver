@@ -21,4 +21,6 @@ public sealed class CarbonioConnectionSettings
   public bool PromptReportExportAfterMove { get; set; } = true;
   public string DownloadRootDirectory { get; set; } = string.Empty;
   public int DownloadSpeedLimitKbps { get; set; }
+  public int DownloadRetryCount { get; set; } = 3;
+  public int DownloadRetryDelaySeconds { get; set; } = 10;
 }

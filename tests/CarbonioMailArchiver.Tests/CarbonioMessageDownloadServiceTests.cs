@@ -61,4 +61,14 @@ public sealed class CarbonioMessageDownloadServiceTests
 
     Assert.Equal(messageDate.LocalDateTime, result);
   }
+
+  [Fact]
+  public void BuildTemporaryFilePath_AppendsDownloadExtension()
+  {
+    var filePath = Path.Combine("D:", "Downloads", "message.eml");
+
+    var result = CarbonioMessageDownloadService.BuildTemporaryFilePath(filePath);
+
+    Assert.Equal($"{filePath}.download", result);
+  }
 }
