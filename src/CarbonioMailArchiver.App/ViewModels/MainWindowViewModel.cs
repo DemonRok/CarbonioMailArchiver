@@ -1035,12 +1035,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
+        var folderLabel = folderScan.SourceFolder.AbsolutePath;
         foreach (var messageIdBatch in folderScan.MessageIds.Chunk(batchSize))
         {
           moveCancellation.Token.ThrowIfCancellationRequested();
           batchNumber++;
-          UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"{folderScan.SourceFolder.AbsolutePath}: spostati finora {movedCount}/{expectedTotal} messaggi.");
-          UpdateOperationMetrics(movedCount, expectedTotal, folderScan.SourceFolder.AbsolutePath);
+          UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"{folderLabel}: spostati finora {movedCount}/{expectedTotal} messaggi.");
+          UpdateOperationMetrics(movedCount, expectedTotal, folderLabel);
           StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
           var moveResult = await MoveMessagesWithRetryAsync(
             settings,
@@ -1082,12 +1083,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
           var previousMovedCount = movedCount;
           movedCount += moveResult.MovedCount;
-          UpdateOperationMetrics(movedCount, expectedTotal, folderScan.SourceFolder.AbsolutePath);
-          await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} completato", moveCancellation.Token);
+          UpdateOperationMetrics(movedCount, expectedTotal, folderLabel);
+          await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"{folderLabel}: ", moveCancellation.Token);
           _logger.LogInformation(
             "Spostamento batch {BatchNumber} completato. Cartella: {SourceFolder}. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
             batchNumber,
-            folderScan.SourceFolder.AbsolutePath,
+            folderLabel,
             moveResult.MovedCount,
             movedCount);
         }
@@ -1681,6 +1682,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     CancellationToken cancellationToken)
   {
     var foldersToProcess = GetSourceFoldersToProcess(sourceFolder);
+    if (maxMessagesToMove == 0 && foldersToProcess.Count > 1)
+    {
+      return await ScanSourceFoldersInParallelAsync(settings, password, foldersToProcess, beforeDate, batchSize, cancellationToken);
+    }
+
     var scans = new List<SourceFolderScan>();
     var remainingLimit = maxMessagesToMove;
 
@@ -1727,6 +1733,62 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     return scans;
+  }
+
+  private async Task<IReadOnlyList<SourceFolderScan>> ScanSourceFoldersInParallelAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    IReadOnlyList<FolderSelectionViewModel> foldersToProcess,
+    DateOnly beforeDate,
+    int batchSize,
+    CancellationToken cancellationToken)
+  {
+    var semaphore = new SemaphoreSlim(2, 2);
+    try
+    {
+      var tasks = foldersToProcess.Select(async folder =>
+      {
+        await semaphore.WaitAsync(cancellationToken);
+        try
+        {
+          cancellationToken.ThrowIfCancellationRequested();
+          MoveBatchText = "Conteggio";
+          MoveDetailText = $"Conteggio {folder.AbsolutePath}...";
+          MoveProgressText = MoveDetailText;
+          StatusMessage = MoveDetailText;
+
+          var scanResult = await ScanMessageIdsAsync(
+            settings,
+            password,
+            beforeDate,
+            $"inid:{folder.Id}",
+            batchSize,
+            0,
+            folder.AbsolutePath,
+            cancellationToken);
+
+          return new SourceFolderScan(
+            folder,
+            GetPlannedDestinationFolder(folder),
+            scanResult.IsSuccess,
+            scanResult.Message,
+            scanResult.MessageIds);
+        }
+        finally
+        {
+          semaphore.Release();
+        }
+      }).ToArray();
+
+      var scans = await Task.WhenAll(tasks);
+      return scans
+        .OrderBy(scan => scan.SourceFolder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
+    }
+    finally
+    {
+      semaphore.Dispose();
+    }
   }
 
   private IReadOnlyList<FolderSelectionViewModel> GetSourceFoldersToProcess(FolderSelectionViewModel sourceFolder)
@@ -2350,13 +2412,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveBatchText = batchText;
       MoveDetailText = detailText;
       MoveProgressText = $"{batchText}. {detailText}";
-      OperationMetricsText = string.Empty;
-      OperationDownloadedText = string.Empty;
-      OperationElapsedText = string.Empty;
-      OperationSpeedText = string.Empty;
-      OperationEtaText = string.Empty;
-      OperationFolderText = string.Empty;
-      OperationFileText = string.Empty;
       return;
     }
 
@@ -2366,21 +2421,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = batchText;
     MoveDetailText = detailText;
     MoveProgressText = $"{batchText}. {detailText}";
-    OperationMetricsText = string.Empty;
-    OperationDownloadedText = string.Empty;
-    OperationElapsedText = string.Empty;
-    OperationSpeedText = string.Empty;
-    OperationEtaText = string.Empty;
-    OperationFolderText = string.Empty;
-    OperationFileText = string.Empty;
   }
 
-  private async Task AnimateMoveProgressAsync(int fromCount, int toCount, int expectedTotal, string text, CancellationToken cancellationToken)
+  private async Task AnimateMoveProgressAsync(int fromCount, int toCount, int expectedTotal, string batchText, string detailPrefix, CancellationToken cancellationToken)
   {
     var delta = toCount - fromCount;
     if (delta <= 0)
     {
-      UpdateMoveProgress(toCount, expectedTotal, text, $"{toCount}/{expectedTotal} messaggi spostati.");
+      UpdateMoveProgress(toCount, expectedTotal, batchText, $"{detailPrefix}{toCount}/{expectedTotal} messaggi spostati.");
       return;
     }
 
@@ -2388,7 +2436,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     for (var movedCount = fromCount + 1; movedCount <= toCount; movedCount++)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      UpdateMoveProgress(movedCount, expectedTotal, text, $"{movedCount}/{expectedTotal} messaggi spostati.");
+      UpdateMoveProgress(movedCount, expectedTotal, batchText, $"{detailPrefix}{movedCount}/{expectedTotal} messaggi spostati.");
       await Task.Delay(delay, cancellationToken);
     }
   }
