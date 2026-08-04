@@ -1860,9 +1860,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     RecentLogText = string.Join(Environment.NewLine, lines);
-    StatusMessage = RecentLogEntries.Count == 0
-      ? "Nessun log disponibile."
-      : $"Log aggiornato: {RecentLogEntries.Count} righe mostrate in formato leggibile.";
   }
 
   private Task CopyLogsAsync()

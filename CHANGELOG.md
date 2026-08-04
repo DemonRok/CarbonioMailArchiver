@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.7] - 2026-08-04
+
+- Ripristinato il messaggio di stato operativo al posto dell'aggiornamento tecnico del log.
+- Rigenerata l'icona dell'app a partire dal PNG trasparente aggiornato.
+
 ## [1.8.6] - 2026-08-04
 
 - Reso il pulsante `Comprimi EML` disponibile solo dopo una verifica dei download completata con esito positivo.
