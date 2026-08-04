@@ -1754,10 +1754,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
           cancellationToken.ThrowIfCancellationRequested();
-          MoveBatchText = "Conteggio";
-          MoveDetailText = $"Conteggio {folder.AbsolutePath}...";
-          MoveProgressText = MoveDetailText;
-          StatusMessage = MoveDetailText;
+          _logger.LogInformation("Conteggio cartella in parallelo: {Folder}.", folder.AbsolutePath);
 
           var scanResult = await ScanMessageIdsAsync(
             settings,
@@ -1778,6 +1775,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
         finally
         {
+          _logger.LogInformation("Conteggio cartella completato: {Folder}.", folder.AbsolutePath);
           semaphore.Release();
         }
       }).ToArray();
