@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.9] - 2026-08-04
+
+- Allineata la versione corrente a `1.8.9` nei metadati di build.
+- Ripulita la documentazione principale per renderla più coerente e meno verbosa.
+
 ## [1.8.8] - 2026-08-04
 
 - Sostituita la conferma modale sulla cancellazione delle cartelle vuote con una finestra dedicata non bloccante, così la preview resta consultabile.
