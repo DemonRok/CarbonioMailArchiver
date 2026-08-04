@@ -210,6 +210,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand DecreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(-1));
   public ICommand IncreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(1));
   public ObservableCollection<string> RecentLogLines { get; } = [];
+  public ObservableCollection<LogEntryViewModel> RecentLogEntries { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
   public IReadOnlyList<SevenZipCompressionLevelOption> SevenZipCompressionLevels { get; } =
@@ -267,6 +268,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     get => _recentLogText;
     private set => SetField(ref _recentLogText, value);
   }
+
+  public sealed record LogEntryViewModel(string Timestamp, string Level, string Source, string Message);
 
   public string SearchBeforeDate
   {
@@ -1744,13 +1747,28 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private async Task RefreshLogsAsync()
   {
     RecentLogLines.Clear();
+    RecentLogEntries.Clear();
     var lines = await _operationLogService.ReadRecentLinesAsync(200, CancellationToken.None);
+    var friendlyLines = new List<string>(lines.Count);
     foreach (var line in lines)
     {
       RecentLogLines.Add(line);
+      var entry = ParseLogLine(line);
+      if (entry is not null)
+      {
+        RecentLogEntries.Add(entry);
+        friendlyLines.Add($"{entry.Timestamp}  [{entry.Level}]  {entry.Source}  {entry.Message}");
+      }
+      else
+      {
+        friendlyLines.Add(line);
+      }
     }
 
     RecentLogText = string.Join(Environment.NewLine, lines);
+    StatusMessage = RecentLogEntries.Count == 0
+      ? "Nessun log disponibile."
+      : $"Log aggiornato: {RecentLogEntries.Count} righe mostrate in formato leggibile.";
   }
 
   private Task CopyLogsAsync()
@@ -1768,8 +1786,70 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     await _operationLogService.ClearAsync(CancellationToken.None);
     RecentLogLines.Clear();
+    RecentLogEntries.Clear();
     RecentLogText = string.Empty;
     StatusMessage = "Log cancellato.";
+  }
+
+  private static LogEntryViewModel? ParseLogLine(string line)
+  {
+    var parts = line.Split('\t', 5, StringSplitOptions.None);
+    if (parts.Length < 4)
+    {
+      return null;
+    }
+
+    var timestamp = FormatLogTimestamp(parts[0]);
+    var level = parts[1].Trim();
+    var source = FormatLogSource(parts[2].Trim());
+    var message = FormatLogMessage(parts[3].Trim(), parts.Length >= 5 ? parts[4].Trim() : string.Empty, source);
+    return new LogEntryViewModel(timestamp, level, source, message);
+  }
+
+  private static string FormatLogTimestamp(string timestamp)
+  {
+    return DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+      ? parsed.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+      : timestamp;
+  }
+
+  private static string FormatLogSource(string source)
+  {
+    if (string.IsNullOrWhiteSpace(source))
+    {
+      return "Sistema";
+    }
+
+    return source switch
+    {
+      "Microsoft.Hosting.Lifetime" => "App",
+      "CarbonioMailArchiver.App.ViewModels.MainWindowViewModel" => "Interfaccia",
+      _ when source.EndsWith("DiagnosticService", StringComparison.Ordinal) => source.Replace("CarbonioMailArchiver.Infrastructure.Services.", string.Empty, StringComparison.Ordinal),
+      _ => source.Replace("CarbonioMailArchiver.Infrastructure.Services.", string.Empty, StringComparison.Ordinal)
+    };
+  }
+
+  private static string FormatLogMessage(string message, string extra, string source)
+  {
+    var cleanMessage = message.Trim();
+    var cleanExtra = extra.Trim();
+
+    if (source == "App")
+    {
+      return cleanMessage switch
+      {
+        "Application started. Press Ctrl+C to shut down." => "Applicazione avviata.",
+        "Application is shutting down..." => "Applicazione in chiusura.",
+        _ => cleanMessage
+      };
+    }
+
+    if (!string.IsNullOrWhiteSpace(cleanExtra))
+    {
+      cleanMessage = $"{cleanMessage} - {cleanExtra}";
+    }
+
+    return cleanMessage;
   }
 
   private async Task DeleteSelectedFolderIfEmptyAsync(FolderSelectionViewModel? folder, string role)

@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.4] - 2026-08-04
+
+- Resa piu' leggibile la scheda Log con righe compatte, sorgente abbreviata e messaggi formattati in modo umano.
+- Mantena la copia completa del log grezzo per il debug e gli appunti.
+
 ## [1.8.3] - 2026-08-04
 
 - Verificata e predisposta la creazione integrata di archivi `.7z` senza eseguibile esterno di 7-Zip.

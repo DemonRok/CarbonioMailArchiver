@@ -36,10 +36,17 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel>
-            <TextBlock Text="Carbonio Mail Archiver" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Operativo: ricerca, conteggio e spostamento email Carbonio via API server, con log e report CSV." Foreground="#555" Margin="0,4,0,18" />
-        </StackPanel>
+        <Grid Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Image Source="Assets/app-icon.png" Width="44" Height="44" VerticalAlignment="Top" Margin="0,2,14,0" />
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="Carbonio Mail Archiver" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Text="Ricerca, conteggio, spostamento, download e compressione delle email Carbonio via API server, con log e report CSV." Foreground="#555" Margin="0,4,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
 
         <TabControl Grid.Row="1">
             <TabItem Header="Connessione">
@@ -132,7 +139,6 @@
                                     Margin="350,0,0,12" />
 
                             <WrapPanel Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
-                                <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="140" Margin="0,0,8,8" />
@@ -142,6 +148,7 @@
                                 <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
                             </WrapPanel>
                         </Grid>
                     </ScrollViewer>
@@ -433,8 +440,8 @@
                         <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                     </StackPanel>
                     <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
-                        <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" Margin="0,0,10,0" />
-                        <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" />
+                        <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" Margin="0,0,10,0" />
+                        <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" />
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -451,16 +458,31 @@
                         <Button Content="Cancella log" Command="{Binding ClearLogsCommand}" Width="110" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
                         <TextBlock Text="{Binding LogDirectory}" VerticalAlignment="Center" Foreground="#555" />
                     </StackPanel>
-                    <TextBox Grid.Row="1"
-                             Text="{Binding RecentLogText, Mode=OneWay}"
-                             FontFamily="Consolas"
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding RecentLogEntries}"
+                             BorderThickness="1"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                              FontSize="12"
-                             IsReadOnly="True"
-                             AcceptsReturn="True"
-                             AcceptsTab="True"
-                             TextWrapping="NoWrap"
-                             HorizontalScrollBarVisibility="Auto"
-                             VerticalScrollBarVisibility="Auto" />
+                             Background="White"
+                             IsTextSearchEnabled="False">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="78" />
+                                        <ColumnDefinition Width="210" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Timestamp}" FontFamily="Consolas" Foreground="#666" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" Foreground="#555" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Source}" Foreground="#444" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Message}" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
             </TabItem>
 
