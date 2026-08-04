@@ -4,6 +4,8 @@ namespace CarbonioMailArchiver.App;
 
 public partial class FolderDeleteConfirmationWindow : Window
 {
+  public bool? ConfirmationResult { get; private set; }
+
   public FolderDeleteConfirmationWindow(string summary, string detail)
   {
     InitializeComponent();
@@ -13,13 +15,13 @@ public partial class FolderDeleteConfirmationWindow : Window
 
   private void ConfirmButton_OnClick(object sender, RoutedEventArgs e)
   {
-    DialogResult = true;
+    ConfirmationResult = true;
     Close();
   }
 
   private void CancelButton_OnClick(object sender, RoutedEventArgs e)
   {
-    DialogResult = false;
+    ConfirmationResult = false;
     Close();
   }
 }

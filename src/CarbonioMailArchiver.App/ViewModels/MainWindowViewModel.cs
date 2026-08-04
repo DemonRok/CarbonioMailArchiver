@@ -2160,7 +2160,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         Owner = owner
       };
-      window.Closed += (_, _) => tcs.TrySetResult(window.DialogResult);
+      window.Closed += (_, _) => tcs.TrySetResult(window.ConfirmationResult);
       window.Show();
     });
 
