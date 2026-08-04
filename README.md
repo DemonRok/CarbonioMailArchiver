@@ -14,7 +14,7 @@ Licenza: MIT. Autore: Mauro Bettinelli.
 - destinazione automatica in Archivio, con creazione delle sottocartelle mancanti sotto `/Archive`;
 - elaborazione opzionale della sorgente e di tutte le sue sottocartelle, una alla volta, in modalita' Archivio;
 - spostamento manuale controllato nel Cestino di cartelle sorgente/destinazione solo se vuote;
-- caricamento automatico cartelle all'avvio, opzionale, se la password e' disponibile tramite DPAPI;
+- caricamento automatico cartelle all'avvio, opzionale, quando la password e' disponibile tramite DPAPI;
 - conteggio effettivo dei messaggi con ricerca paginata;
 - spostamento reale della preview;
 - spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata e limite configurabile fino a 100;
@@ -23,7 +23,7 @@ Licenza: MIT. Autore: Mauro Bettinelli.
 - report CSV opzionale al termine dello spostamento, salvato nella cartella `Reports` accanto all'eseguibile;
 - download EML della destinazione selezionata o dell'Archivio, con ricostruzione dell'albero cartelle sotto la casella;
 - limite opzionale di velocita' download in KB/s (`0` = senza limite);
-- configurazione dedicata con reset default e descrizione opzioni;
+- configurazione dedicata con reset default e descrizione chiara delle opzioni;
 - tab Info con versione, percorsi, licenza e link utili;
 
 ## Compatibilita Carbonio
@@ -107,7 +107,7 @@ La build Release non genera PDB. L'eseguibile pubblicato si trova in `publish\wi
 
 ## Changelog
 
-Le modifiche principali sono tracciate in `CHANGELOG.md`.
+Le modifiche principali sono tracciate in `CHANGELOG.md`, con le versioni piu' recenti elencate in ordine cronologico.
 
 ## Release GitHub
 
