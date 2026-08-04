@@ -48,6 +48,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     long totalBytesDownloaded = 0;
     var skippedCount = 0;
     var downloadedThisSessionCount = 0;
+    var completedCount = 0;
 
     try
     {
@@ -60,7 +61,6 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
         totalCount += messages.Count;
       }
 
-      var completedCount = 0;
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
@@ -125,15 +125,15 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     }
     catch (OperationCanceledException)
     {
-      var verification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, false, null, CancellationToken.None);
+      var verification = new DownloadVerification(totalCount, completedCount, Math.Max(totalCount - completedCount, 0));
       var cancelMessage = AppendVerificationSummary("Download EML annullato dall'utente.", verification);
       logger.LogWarning(
-        "Download EML annullato per {Account}. Verifica parziale: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
+        "Download EML annullato per {Account}. Verifica parziale stimata: presenti {PresentCount}/{ExpectedCount}, mancanti {MissingCount}.",
         settings.Email,
         verification.PresentCount,
         verification.ExpectedCount,
         verification.MissingCount);
-      return new MailDownloadResult(false, cancelMessage, verification.PresentCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
+      return new MailDownloadResult(false, cancelMessage, completedCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
     }
   }
 
