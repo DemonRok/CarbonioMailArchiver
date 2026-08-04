@@ -456,33 +456,79 @@
                         <Button Content="Aggiorna" Command="{Binding RefreshLogsCommand}" Width="96" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
                         <Button Content="Copia tutto" Command="{Binding CopyLogsCommand}" Width="96" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
                         <Button Content="Cancella log" Command="{Binding ClearLogsCommand}" Width="110" Margin="0,0,12,0" IsEnabled="{Binding IsOperationIdle}" />
+                        <ComboBox Width="140"
+                                  Margin="0,0,12,0"
+                                  ItemsSource="{Binding LogLevelFilters}"
+                                  SelectedItem="{Binding SelectedLogLevelFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="{Binding LogDirectory}" VerticalAlignment="Center" Foreground="#555" />
                     </StackPanel>
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding RecentLogEntries}"
-                             BorderThickness="1"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             FontSize="12"
-                             Background="White"
-                             IsTextSearchEnabled="False">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="78" />
-                                        <ColumnDefinition Width="210" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Timestamp}" FontFamily="Consolas" Foreground="#666" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Level}" FontWeight="SemiBold" Foreground="#555" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Source}" Foreground="#444" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}" />
-                                    <TextBlock Grid.Column="3" Text="{Binding Message}" TextWrapping="Wrap" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <ListView Grid.Row="1"
+                              ItemsSource="{Binding RecentLogEntriesView}"
+                              BorderThickness="1"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              FontSize="12"
+                              Background="White"
+                              IsTextSearchEnabled="False"
+                              PreviewMouseDoubleClick="LogListView_OnPreviewMouseDoubleClick">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Width="80">
+                                    <GridViewColumn.Header>
+                                        <GridViewColumnHeader Content="Ora" Tag="TimestampSortKey" Click="LogColumnHeader_OnClick" />
+                                    </GridViewColumn.Header>
+                                    <GridViewColumn.DisplayMemberBinding>
+                                        <Binding Path="Timestamp" />
+                                    </GridViewColumn.DisplayMemberBinding>
+                                </GridViewColumn>
+                                <GridViewColumn Width="86">
+                                    <GridViewColumn.Header>
+                                        <GridViewColumnHeader Content="Livello" Tag="LevelSortKey" Click="LogColumnHeader_OnClick" />
+                                    </GridViewColumn.Header>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Level}" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="{x:Type TextBlock}">
+                                                        <Setter Property="Foreground" Value="#444" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Information">
+                                                                <Setter Property="Foreground" Value="#356AC3" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Warning">
+                                                                <Setter Property="Foreground" Value="#A06B00" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Level}" Value="Error">
+                                                                <Setter Property="Foreground" Value="#B00020" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Width="220">
+                                    <GridViewColumn.Header>
+                                        <GridViewColumnHeader Content="Sorgente" Tag="SourceSortKey" Click="LogColumnHeader_OnClick" />
+                                    </GridViewColumn.Header>
+                                    <GridViewColumn.DisplayMemberBinding>
+                                        <Binding Path="Source" />
+                                    </GridViewColumn.DisplayMemberBinding>
+                                </GridViewColumn>
+                                <GridViewColumn Width="520">
+                                    <GridViewColumn.Header>
+                                        <GridViewColumnHeader Content="Messaggio" Tag="MessageSortKey" Click="LogColumnHeader_OnClick" />
+                                    </GridViewColumn.Header>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#222" />
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
                 </Grid>
             </TabItem>
 

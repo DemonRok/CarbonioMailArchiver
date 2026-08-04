@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.5] - 2026-08-04
+
+- Aggiunto filtro per livello nel Log e intestazioni cliccabili per ordinare le colonne.
+- Reso il Log leggibile con vista tabellare e righe più facili da scandire.
+
 ## [1.8.4] - 2026-08-04
 
 - Resa piu' leggibile la scheda Log con righe compatte, sorgente abbreviata e messaggi formattati in modo umano.

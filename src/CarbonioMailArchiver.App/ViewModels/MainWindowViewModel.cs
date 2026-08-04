@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using CarbonioMailArchiver.Core.Abstractions;
@@ -85,6 +86,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
+  private readonly ListCollectionView _recentLogEntriesView;
   private const string RepositoryUrl = "https://github.com/DemonRok/CarbonioMailArchiver";
   private const string ReleasesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/releases";
   private const string IssuesUrl = "https://github.com/DemonRok/CarbonioMailArchiver/issues";
@@ -165,6 +167,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     BrowseDownloadRootDirectoryCommand = new AsyncRelayCommand(BrowseDownloadRootDirectoryAsync);
     DeleteSourceFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedSourceFolder, "sorgente"));
     DeleteDestinationFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedDestinationFolder, "destinazione"));
+
+    _recentLogEntriesView = (ListCollectionView)CollectionViewSource.GetDefaultView(RecentLogEntries);
+    _recentLogEntriesView.Filter = FilterLogEntry;
+    _recentLogEntriesView.SortDescriptions.Add(new SortDescription(nameof(LogEntryViewModel.TimestampSortKey), ListSortDirection.Descending));
   }
 
   public event PropertyChangedEventHandler? PropertyChanged;
@@ -209,10 +215,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand IncreaseDownloadRetryCountCommand => new AsyncRelayCommand(() => UpdateDownloadRetryCountAsync(1));
   public ICommand DecreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(-1));
   public ICommand IncreaseDownloadRetryDelayCommand => new AsyncRelayCommand(() => UpdateDownloadRetryDelayAsync(1));
-  public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<LogEntryViewModel> RecentLogEntries { get; } = [];
+  public ICollectionView RecentLogEntriesView => _recentLogEntriesView;
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
+  public IReadOnlyList<string> LogLevelFilters { get; } = ["Tutti", "Information", "Warning", "Error"];
   public IReadOnlyList<SevenZipCompressionLevelOption> SevenZipCompressionLevels { get; } =
   [
     new("Veloce", 1),
@@ -269,7 +276,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private set => SetField(ref _recentLogText, value);
   }
 
-  public sealed record LogEntryViewModel(string Timestamp, string Level, string Source, string Message);
+  private string _selectedLogLevelFilter = "Tutti";
+  public string SelectedLogLevelFilter
+  {
+    get => _selectedLogLevelFilter;
+    set
+    {
+      if (string.Equals(_selectedLogLevelFilter, value, StringComparison.Ordinal))
+      {
+        return;
+      }
+
+      SetField(ref _selectedLogLevelFilter, value);
+      _recentLogEntriesView.Refresh();
+      StatusMessage = $"Filtro log: {SelectedLogLevelFilter}.";
+    }
+  }
+
+  public sealed record LogEntryViewModel(
+    string Timestamp,
+    DateTimeOffset TimestampSortKey,
+    string Level,
+    string Source,
+    string Message,
+    string LevelSortKey,
+    string SourceSortKey,
+    string MessageSortKey);
 
   public string SearchBeforeDate
   {
@@ -1746,22 +1778,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private async Task RefreshLogsAsync()
   {
-    RecentLogLines.Clear();
     RecentLogEntries.Clear();
     var lines = await _operationLogService.ReadRecentLinesAsync(200, CancellationToken.None);
-    var friendlyLines = new List<string>(lines.Count);
     foreach (var line in lines)
     {
-      RecentLogLines.Add(line);
       var entry = ParseLogLine(line);
       if (entry is not null)
       {
         RecentLogEntries.Add(entry);
-        friendlyLines.Add($"{entry.Timestamp}  [{entry.Level}]  {entry.Source}  {entry.Message}");
-      }
-      else
-      {
-        friendlyLines.Add(line);
       }
     }
 
@@ -1785,7 +1809,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private async Task ClearLogsAsync()
   {
     await _operationLogService.ClearAsync(CancellationToken.None);
-    RecentLogLines.Clear();
     RecentLogEntries.Clear();
     RecentLogText = string.Empty;
     StatusMessage = "Log cancellato.";
@@ -1800,10 +1823,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var timestamp = FormatLogTimestamp(parts[0]);
+    var timestampSortKey = DateTimeOffset.TryParse(parts[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedTimestamp)
+      ? parsedTimestamp
+      : DateTimeOffset.MinValue;
     var level = parts[1].Trim();
     var source = FormatLogSource(parts[2].Trim());
     var message = FormatLogMessage(parts[3].Trim(), parts.Length >= 5 ? parts[4].Trim() : string.Empty, source);
-    return new LogEntryViewModel(timestamp, level, source, message);
+    return new LogEntryViewModel(
+      timestamp,
+      timestampSortKey,
+      level,
+      source,
+      message,
+      level,
+      source,
+      message);
   }
 
   private static string FormatLogTimestamp(string timestamp)
@@ -1850,6 +1884,22 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     return cleanMessage;
+  }
+
+  private bool FilterLogEntry(object item)
+  {
+    if (item is not LogEntryViewModel entry)
+    {
+      return false;
+    }
+
+    return SelectedLogLevelFilter switch
+    {
+      "Information" => string.Equals(entry.Level, "Information", StringComparison.OrdinalIgnoreCase),
+      "Warning" => string.Equals(entry.Level, "Warning", StringComparison.OrdinalIgnoreCase),
+      "Error" => string.Equals(entry.Level, "Error", StringComparison.OrdinalIgnoreCase),
+      _ => true
+    };
   }
 
   private async Task DeleteSelectedFolderIfEmptyAsync(FolderSelectionViewModel? folder, string role)

@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using CarbonioMailArchiver.App.ViewModels;
 
@@ -8,6 +10,8 @@ namespace CarbonioMailArchiver.App;
 public partial class MainWindow : Window
 {
   private readonly MainWindowViewModel _viewModel;
+  private string? _logSortMemberPath;
+  private ListSortDirection _logSortDirection = ListSortDirection.Descending;
 
   public MainWindow(MainWindowViewModel viewModel)
   {
@@ -49,5 +53,44 @@ public partial class MainWindow : Window
     {
       e.CancelCommand();
     }
+  }
+
+  private void LogColumnHeader_OnClick(object sender, RoutedEventArgs e)
+  {
+    if (sender is not GridViewColumnHeader header || header.Tag is not string memberPath || string.IsNullOrWhiteSpace(memberPath))
+    {
+      return;
+    }
+
+    var view = _viewModel.RecentLogEntriesView as ListCollectionView;
+    if (view is null)
+    {
+      return;
+    }
+
+    if (string.Equals(_logSortMemberPath, memberPath, StringComparison.Ordinal))
+    {
+      _logSortDirection = _logSortDirection == ListSortDirection.Ascending
+        ? ListSortDirection.Descending
+        : ListSortDirection.Ascending;
+    }
+    else
+    {
+      _logSortMemberPath = memberPath;
+      _logSortDirection = ListSortDirection.Ascending;
+    }
+
+    view.SortDescriptions.Clear();
+    view.SortDescriptions.Add(new SortDescription(memberPath, _logSortDirection));
+  }
+
+  private void LogListView_OnPreviewMouseDoubleClick(object sender, MouseButtonEventArgs e)
+  {
+    if (sender is not ListView listView || listView.SelectedItem is not MainWindowViewModel.LogEntryViewModel entry)
+    {
+      return;
+    }
+
+    Clipboard.SetText($"{entry.Timestamp} [{entry.Level}] {entry.Source} {entry.Message}");
   }
 }
