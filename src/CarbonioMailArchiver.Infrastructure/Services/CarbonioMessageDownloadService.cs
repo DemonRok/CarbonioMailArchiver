@@ -169,13 +169,49 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var totalCount = 0;
     var operationStopwatch = Stopwatch.StartNew();
 
-    foreach (var folder in folders)
+    if (folders.Length > 1)
     {
-      cancellationToken.ThrowIfCancellationRequested();
-      progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
-      var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
-      messagesByFolder[folder.Id] = messages;
-      totalCount += messages.Count;
+      var semaphore = new SemaphoreSlim(2, 2);
+      try
+      {
+        var tasks = folders.Select(async folder =>
+        {
+          await semaphore.WaitAsync(cancellationToken);
+          try
+          {
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
+            var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
+            return (FolderId: folder.Id, Messages: messages);
+          }
+          finally
+          {
+            semaphore.Release();
+          }
+        }).ToArray();
+
+        var results = await Task.WhenAll(tasks);
+        foreach (var result in results.OrderBy(result => result.FolderId, StringComparer.Ordinal))
+        {
+          messagesByFolder[result.FolderId] = result.Messages;
+          totalCount += result.Messages.Count;
+        }
+      }
+      finally
+      {
+        semaphore.Dispose();
+      }
+    }
+    else
+    {
+      foreach (var folder in folders)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
+        var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
+        messagesByFolder[folder.Id] = messages;
+        totalCount += messages.Count;
+      }
     }
 
     var verification = await VerifyDownloadedMessagesAsync(targetDirectory, rootFolder, folders, messagesByFolder, true, progress, cancellationToken);
