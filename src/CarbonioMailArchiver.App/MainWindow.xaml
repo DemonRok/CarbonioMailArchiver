@@ -147,7 +147,7 @@
                                 <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" IsEnabled="{Binding CanCompressMessages}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
                             </WrapPanel>
                         </Grid>

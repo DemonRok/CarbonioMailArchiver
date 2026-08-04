@@ -58,6 +58,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private int _downloadRetryCount = 3;
   private int _downloadRetryDelaySeconds = 10;
   private SevenZipCompressionLevelOption _selectedSevenZipCompressionLevel = SevenZipCompressionLevelOption.Default;
+  private bool _downloadVerificationSucceeded;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -149,7 +150,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     CancelMoveCommand = _cancelMoveCommand;
     DownloadMessagesCommand = new AsyncRelayCommand(DownloadMessagesAsync, () => !IsMoveInProgress);
     VerifyDownloadedMessagesCommand = new AsyncRelayCommand(VerifyDownloadedMessagesAsync, () => !IsMoveInProgress);
-    CompressMessagesCommand = new AsyncRelayCommand(CompressMessagesAsync, () => !IsMoveInProgress);
+    CompressMessagesCommand = new AsyncRelayCommand(CompressMessagesAsync, () => !IsMoveInProgress && _downloadVerificationSucceeded);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -306,7 +307,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public string SearchBeforeDate
   {
     get => _searchBeforeDate;
-    set => SetField(ref _searchBeforeDate, value);
+    set
+    {
+      if (string.Equals(_searchBeforeDate, value, StringComparison.Ordinal))
+      {
+        return;
+      }
+
+      SetField(ref _searchBeforeDate, value);
+      InvalidateDownloadVerification();
+    }
   }
 
   public FolderSelectionViewModel? SelectedSourceFolder
@@ -324,6 +334,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         _lastSourceFolderId = value.Id;
       }
+
+      InvalidateDownloadVerification();
     }
   }
 
@@ -342,6 +354,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         _lastDestinationFolderId = value.Id;
       }
+
+      InvalidateDownloadVerification();
     }
   }
 
@@ -358,6 +372,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       _useArchiveDestination = value;
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UseArchiveDestination)));
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDestinationFolderSelectionEnabled)));
+      InvalidateDownloadVerification();
     }
   }
 
@@ -396,7 +411,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public string DownloadRootDirectory
   {
     get => _downloadRootDirectory;
-    set => SetField(ref _downloadRootDirectory, value);
+    set
+    {
+      if (string.Equals(_downloadRootDirectory, value, StringComparison.Ordinal))
+      {
+        return;
+      }
+
+      SetField(ref _downloadRootDirectory, value);
+      InvalidateDownloadVerification();
+    }
   }
 
   public int TimeoutSeconds
@@ -444,7 +468,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public SevenZipCompressionLevelOption SelectedSevenZipCompressionLevel
   {
     get => _selectedSevenZipCompressionLevel;
-    set => SetField(ref _selectedSevenZipCompressionLevel, value ?? SevenZipCompressionLevelOption.Default);
+    set
+    {
+      var nextValue = value ?? SevenZipCompressionLevelOption.Default;
+      if (EqualityComparer<SevenZipCompressionLevelOption>.Default.Equals(_selectedSevenZipCompressionLevel, nextValue))
+      {
+        return;
+      }
+
+      SetField(ref _selectedSevenZipCompressionLevel, nextValue);
+      InvalidateDownloadVerification();
+    }
   }
 
   public bool IsMoveInProgress
@@ -470,10 +504,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         compressCommand.RaiseCanExecuteChanged();
       }
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
     }
   }
 
   public bool IsOperationIdle => !IsMoveInProgress;
+
+  public bool CanCompressMessages => !IsMoveInProgress && _downloadVerificationSucceeded;
 
   public int MoveProgressPercentage
   {
@@ -1341,11 +1378,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
       OperationFileText = $"Percorso locale: {result.TargetDirectory}";
       StatusMessage = result.Message;
+      _downloadVerificationSucceeded = result.IsSuccess && result.MissingCount == 0;
+      if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
+      {
+        compressCommand.RaiseCanExecuteChanged();
+      }
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
       await RefreshLogsAsync();
     }
     catch (OperationCanceledException)
     {
       StatusMessage = "Verifica EML annullata dall'utente.";
+      _downloadVerificationSucceeded = false;
+      if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
+      {
+        compressCommand.RaiseCanExecuteChanged();
+      }
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
       ResetMoveProgress();
       await RefreshLogsAsync();
     }
@@ -1353,6 +1402,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = $"Verifica EML non completata: {ex.Message}";
       IsMoveProgressIndeterminate = false;
+      _downloadVerificationSucceeded = false;
+      if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
+      {
+        compressCommand.RaiseCanExecuteChanged();
+      }
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
       await RefreshLogsAsync();
     }
     finally
@@ -1360,6 +1415,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       IsMoveInProgress = false;
       _moveCancellationTokenSource = null;
     }
+  }
+
+  private void InvalidateDownloadVerification()
+  {
+    if (!_downloadVerificationSucceeded)
+    {
+      return;
+    }
+
+    _downloadVerificationSucceeded = false;
+    if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
+    {
+      compressCommand.RaiseCanExecuteChanged();
+    }
+    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
   }
 
   private async Task CompressMessagesAsync()
