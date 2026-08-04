@@ -83,6 +83,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _stableOperationEtaText = "ETA in calcolo";
   private DateTimeOffset _lastOperationEtaUpdate = DateTimeOffset.MinValue;
   private bool _operationMetricsVisible;
+  private int _operationCompletedCount;
+  private int? _operationTotalCount;
+  private string _operationCurrentLabel = string.Empty;
   private MailDownloadProgress? _lastDownloadProgress;
   private string _stableDownloadEtaText = "ETA in calcolo";
   private DateTimeOffset _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
@@ -90,6 +93,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private TimeSpan _downloadSpeedWarmupThreshold = TimeSpan.FromSeconds(50);
   private TimeSpan _downloadEtaWarmupThreshold = TimeSpan.FromSeconds(75);
   private DispatcherTimer? _downloadMetricsTimer;
+  private DispatcherTimer? _operationMetricsTimer;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
@@ -666,8 +670,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     _logger.LogInformation("Configurazione locale salvata per {Account}.", settings.Email);
-    var destinationMode = settings.UseArchiveDestination ? "Archivio automatico" : settings.LastDestinationFolderId;
-    StatusMessage = $"Configurazione salvata. Cartelle: sorgente {settings.LastSourceFolderId}, destinazione {destinationMode}. Le password non sono scritte nel JSON.";
+    var sourceFolderLabel = SelectedSourceFolder?.AbsolutePath ?? settings.LastSourceFolderId;
+    var destinationFolderLabel = settings.UseArchiveDestination
+      ? "Archivio automatico"
+      : SelectedDestinationFolder?.AbsolutePath ?? settings.LastDestinationFolderId;
+    StatusMessage = $"Configurazione salvata. Cartelle: sorgente {sourceFolderLabel}, destinazione {destinationFolderLabel}. Le password non sono scritte nel JSON.";
     await RefreshLogsAsync();
   }
 
@@ -914,6 +921,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     StatusMessage = MoveProgressText;
     BeginOperationMetrics();
+    StartOperationMetricsTimer();
     IReadOnlyList<SourceFolderScan> folderScans;
     try
     {
@@ -926,6 +934,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveBatchText = "Conteggio annullato";
       MoveDetailText = MoveProgressText;
       ClearOperationMetrics();
+      StopOperationMetricsTimer();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -936,6 +945,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = failedScan.Message;
       ClearOperationMetrics();
+      StopOperationMetricsTimer();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -947,6 +957,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = "Nessun messaggio trovato da spostare.";
       PreviewMessages.Clear();
       ClearOperationMetrics();
+      StopOperationMetricsTimer();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -977,6 +988,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = "Spostamento batch annullato.";
       await RefreshLogsAsync();
       ResetMoveProgress();
+      StopOperationMetricsTimer();
       return;
     }
 
@@ -1015,10 +1027,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             reportRows,
             "Interrotto per errore",
             CancellationToken.None);
-          StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {destinationResolve.Message}";
-          StatusMessage += FormatReportStatus(errorReportPath);
-          await RefreshLogsAsync();
-          return;
+      StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {destinationResolve.Message}";
+      StatusMessage += FormatReportStatus(errorReportPath);
+      await RefreshLogsAsync();
+      StopOperationMetricsTimer();
+      return;
         }
 
         destinationFolder = new FolderSelectionViewModel(destinationResolve.Folder);
@@ -1055,10 +1068,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
               reportRows,
               "Interrotto per errore",
               CancellationToken.None);
-            StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
-            StatusMessage += FormatReportStatus(errorReportPath);
-            await RefreshLogsAsync();
-            return;
+      StatusMessage = $"Spostamento batch interrotto. Spostati: {movedCount}. Errore: {moveResult.Fault?.Reason}";
+      StatusMessage += FormatReportStatus(errorReportPath);
+      await RefreshLogsAsync();
+      StopOperationMetricsTimer();
+      return;
           }
 
           foreach (var movedId in messageIdBatch)
@@ -1096,6 +1110,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
       await RefreshLogsAsync();
       ShowMoveCompletedMessage();
+      StopOperationMetricsTimer();
     }
     catch (OperationCanceledException)
     {
@@ -1116,12 +1131,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveBatchText = "Spostamento annullato";
       MoveDetailText = "L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
       ClearOperationMetrics();
+      StopOperationMetricsTimer();
       await RefreshLogsAsync();
     }
     finally
     {
       IsMoveInProgress = false;
       _moveCancellationTokenSource = null;
+      StopOperationMetricsTimer();
     }
   }
 
@@ -2384,6 +2401,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _stableOperationEtaText = "ETA in calcolo";
     _lastOperationEtaUpdate = DateTimeOffset.MinValue;
     _operationMetricsVisible = true;
+    _operationCompletedCount = 0;
+    _operationTotalCount = null;
+    _operationCurrentLabel = string.Empty;
     OperationElapsedText = "Trascorso: 0s";
     OperationSpeedText = "Velocita': in calcolo";
     OperationEtaText = "ETA: in calcolo";
@@ -2407,6 +2427,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var speedText = elapsed < _operationSpeedWarmupThreshold || completedCount <= 0
       ? "in calcolo"
       : $"{completedCount / Math.Max(elapsed.TotalSeconds, 1):F1} msg/s";
+
+    _operationCompletedCount = completedCount;
+    _operationTotalCount = totalCount;
+    _operationCurrentLabel = currentLabel;
 
     if (totalCount is > 0
       && completedCount > 0
@@ -2434,11 +2458,47 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     _operationMetricsVisible = false;
     _operationStartedAt = DateTimeOffset.MinValue;
+    _operationCompletedCount = 0;
+    _operationTotalCount = null;
+    _operationCurrentLabel = string.Empty;
     _stableOperationEtaText = "ETA in calcolo";
     _lastOperationEtaUpdate = DateTimeOffset.MinValue;
     OperationElapsedText = string.Empty;
     OperationSpeedText = string.Empty;
     OperationEtaText = string.Empty;
+  }
+
+  private void StartOperationMetricsTimer()
+  {
+    StopOperationMetricsTimer();
+    _operationMetricsTimer = new DispatcherTimer
+    {
+      Interval = TimeSpan.FromSeconds(1)
+    };
+    _operationMetricsTimer.Tick += OperationMetricsTimer_OnTick;
+    _operationMetricsTimer.Start();
+  }
+
+  private void StopOperationMetricsTimer()
+  {
+    if (_operationMetricsTimer is null)
+    {
+      return;
+    }
+
+    _operationMetricsTimer.Stop();
+    _operationMetricsTimer.Tick -= OperationMetricsTimer_OnTick;
+    _operationMetricsTimer = null;
+  }
+
+  private void OperationMetricsTimer_OnTick(object? sender, EventArgs e)
+  {
+    if (!_operationMetricsVisible)
+    {
+      return;
+    }
+
+    UpdateOperationMetrics(_operationCompletedCount, _operationTotalCount, _operationCurrentLabel);
   }
 
   private async Task<MailMoveResult> MoveMessagesWithRetryAsync(
