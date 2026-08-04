@@ -45,6 +45,8 @@ public sealed record FolderDeletePlanResult(bool IsSuccess, string Message, IRea
 
 public sealed record FolderDeleteResult(bool IsSuccess, string Message, int MovedToTrashCount);
 
+public sealed record ArchiveExportProgress(int CompletedCount, int TotalCount, string CurrentPath);
+
 public sealed record MailDownloadProgress(
   string CurrentFolder,
   string CurrentFile,

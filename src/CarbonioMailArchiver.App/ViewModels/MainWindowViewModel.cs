@@ -1532,9 +1532,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    var filesToCompress = Directory.EnumerateFiles(accountDownloadDirectory, "*", SearchOption.AllDirectories).Count();
+    if (filesToCompress == 0)
+    {
+      StatusMessage = $"Nessun file EML da comprimere in {accountDownloadDirectory}.";
+      return;
+    }
+
     var archivePath = Path.Combine(settings.DownloadRootDirectory, $"{SanitizePathSegment(settings.Email)}.7z");
     var confirmation = MessageBox.Show(
-      $"Verificare e comprimere la cartella download della casella?\n\nCartella: {accountDownloadDirectory}\nArchivio: {archivePath}\n\nSe la compressione va a buon fine, la cartella non compressa verra' eliminata.",
+      $"Comprimere la cartella download della casella?\n\nCartella: {accountDownloadDirectory}\nArchivio: {archivePath}\nFile da comprimere: {filesToCompress}\n\nLa verifica EML e' gia' stata completata. Se la compressione va a buon fine, la cartella non compressa verra' eliminata.",
       "Conferma compressione EML",
       MessageBoxButton.YesNo,
       MessageBoxImage.Question,
@@ -1552,72 +1559,40 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _moveCancellationTokenSource = compressionCancellation;
     IsMoveInProgress = true;
     MoveProgressPercentage = 0;
-    MoveProgressPercentText = string.Empty;
+    MoveProgressPercentText = "0%";
     MoveBatchText = string.Empty;
-    MoveDetailText = $"Verifica EML in {rootFolder.AbsolutePath}...";
+    MoveDetailText = $"Compressione EML in {accountDownloadDirectory}...";
     MoveProgressText = MoveDetailText;
-    IsMoveProgressIndeterminate = true;
+    IsMoveProgressIndeterminate = false;
     OperationMetricsText = string.Empty;
-    OperationDownloadedText = string.Empty;
-    OperationElapsedText = string.Empty;
-    OperationSpeedText = string.Empty;
-    OperationEtaText = string.Empty;
+    OperationDownloadedText = $"File compressi: 0/{filesToCompress}";
+    OperationElapsedText = "Trascorso: 0s";
+    OperationSpeedText = "Velocita': in calcolo";
+    OperationEtaText = "ETA: in calcolo";
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
-    OperationFileText = "Verifica in corso";
+    OperationFileText = "Preparazione archivio";
     StatusMessage = MoveDetailText;
     BeginOperationMetrics();
+    StartOperationMetricsTimer();
 
-    var verifyProgress = new Progress<MailDownloadProgress>(downloadProgress =>
+    var archiveProgress = new Progress<ArchiveExportProgress>(archiveProgress =>
     {
-      OperationFolderText = $"Cartella: {downloadProgress.CurrentFolder}";
-      OperationFileText = downloadProgress.CurrentFile;
-      MoveDetailText = downloadProgress.TotalCount <= 0
-        ? "Verifica EML: conteggio messaggi in corso..."
-        : $"Verifica EML: presenti {downloadProgress.CompletedCount}/{downloadProgress.TotalCount}.";
-      MoveProgressText = MoveDetailText;
-      StatusMessage = MoveDetailText;
+      MoveProgressPercentage = archiveProgress.TotalCount <= 0
+        ? 0
+        : Math.Clamp((int)Math.Round(archiveProgress.CompletedCount * 100d / archiveProgress.TotalCount), 0, 100);
+      MoveProgressPercentText = $"{MoveProgressPercentage}%";
+      OperationDownloadedText = $"File compressi: {archiveProgress.CompletedCount}/{archiveProgress.TotalCount}";
+      OperationFileText = $"File: {archiveProgress.CurrentPath}";
+      UpdateOperationMetrics(archiveProgress.CompletedCount, archiveProgress.TotalCount, accountDownloadDirectory);
+      StatusMessage = $"Compressione 7z in corso... {archiveProgress.CompletedCount}/{archiveProgress.TotalCount}";
     });
 
     try
     {
-      var verification = await _messageDownloadService.VerifyFolderTreeAsync(
-        settings,
-        password,
-        ToMailFolder(rootFolder),
-        foldersToVerify.Select(ToMailFolder).ToArray(),
-        settings.DownloadRootDirectory,
-        batchSize,
-        verifyProgress,
-        compressionCancellation.Token);
-
-      if (!verification.IsSuccess || verification.MissingCount > 0)
-      {
-        IsMoveProgressIndeterminate = false;
-        MoveProgressPercentage = verification.ExpectedCount == 0
-          ? 0
-          : Math.Clamp((int)Math.Round(verification.PresentCount * 100d / verification.ExpectedCount), 0, 100);
-        MoveProgressPercentText = verification.ExpectedCount == 0 ? string.Empty : $"{MoveProgressPercentage}%";
-        MoveDetailText = $"Compressione interrotta: verifica EML non completa. {verification.Message}";
-        MoveProgressText = MoveDetailText;
-        StatusMessage = MoveDetailText;
-        ClearOperationMetrics();
-        await RefreshLogsAsync();
-        return;
-      }
-
-      IsMoveProgressIndeterminate = true;
-      MoveProgressPercentText = string.Empty;
       MoveDetailText = $"Compressione 7z in corso da {accountDownloadDirectory}...";
       MoveProgressText = MoveDetailText;
       OperationFolderText = $"Cartella: {accountDownloadDirectory}";
-      OperationFileText = "Preparazione archivio";
       StatusMessage = MoveDetailText;
-
-      var archiveProgress = new Progress<string>(entryName =>
-      {
-        OperationFileText = $"File: {entryName}";
-        StatusMessage = "Compressione 7z in corso...";
-      });
 
       var createdArchivePath = await _archiveExportService.CreateSevenZipAsync(
         accountDownloadDirectory,
@@ -1641,7 +1616,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         },
         compressionCancellation.Token);
 
-      IsMoveProgressIndeterminate = false;
       MoveProgressPercentage = 100;
       MoveProgressPercentText = "100%";
       MoveBatchText = "Compressione completata";
@@ -1650,6 +1624,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       OperationFolderText = $"Archivio: {createdArchivePath}";
       OperationFileText = string.Empty;
       StatusMessage = MoveDetailText;
+      StopOperationMetricsTimer();
       ClearOperationMetrics();
       await RefreshLogsAsync();
       MessageBox.Show(
@@ -1662,6 +1637,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = "Compressione EML annullata dall'utente.";
       ResetMoveProgress();
+      StopOperationMetricsTimer();
       ClearOperationMetrics();
       await RefreshLogsAsync();
     }
@@ -1669,7 +1645,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       _logger.LogWarning(ex, "Compressione EML non completata per {Account}.", settings.Email);
       StatusMessage = $"Compressione EML non completata: {ex.Message}";
-      IsMoveProgressIndeterminate = false;
+      StopOperationMetricsTimer();
       ClearOperationMetrics();
       await RefreshLogsAsync();
     }

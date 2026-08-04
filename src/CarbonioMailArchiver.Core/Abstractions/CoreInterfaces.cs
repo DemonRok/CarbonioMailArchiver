@@ -109,7 +109,12 @@ public interface IOperationReportService
 
 public interface IArchiveExportService
 {
-  Task<string> CreateSevenZipAsync(string sourceDirectory, string archivePath, int compressionLevel, IProgress<string>? progress, CancellationToken cancellationToken);
+  Task<string> CreateSevenZipAsync(
+    string sourceDirectory,
+    string archivePath,
+    int compressionLevel,
+    IProgress<ArchiveExportProgress>? progress,
+    CancellationToken cancellationToken);
 }
 
 public interface ICsvExportService

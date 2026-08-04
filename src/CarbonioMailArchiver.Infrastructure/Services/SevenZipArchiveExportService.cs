@@ -1,4 +1,5 @@
 using CarbonioMailArchiver.Core.Abstractions;
+using CarbonioMailArchiver.Core.Models;
 using SharpCompress.Common;
 using SharpCompress.Writers;
 using SharpCompress.Writers.SevenZip;
@@ -7,7 +8,12 @@ namespace CarbonioMailArchiver.Infrastructure.Services;
 
 public sealed class SevenZipArchiveExportService : IArchiveExportService
 {
-  public Task<string> CreateSevenZipAsync(string sourceDirectory, string archivePath, int compressionLevel, IProgress<string>? progress, CancellationToken cancellationToken)
+  public Task<string> CreateSevenZipAsync(
+    string sourceDirectory,
+    string archivePath,
+    int compressionLevel,
+    IProgress<ArchiveExportProgress>? progress,
+    CancellationToken cancellationToken)
   {
     return Task.Run(
       () =>
@@ -30,17 +36,20 @@ public sealed class SevenZipArchiveExportService : IArchiveExportService
           File.Delete(fullArchivePath);
         }
 
+        var files = Directory.EnumerateFiles(fullSourceDirectory, "*", SearchOption.AllDirectories).ToArray();
         using var stream = File.Create(fullArchivePath);
         var options = new SevenZipWriterOptions(CompressionType.LZMA)
         {
           CompressionLevel = Math.Clamp(compressionLevel, 0, 9)
         };
         using var writer = WriterFactory.OpenWriter(stream, ArchiveType.SevenZip, options);
-        foreach (var filePath in Directory.EnumerateFiles(fullSourceDirectory, "*", SearchOption.AllDirectories))
+        var completedCount = 0;
+        foreach (var filePath in files)
         {
           cancellationToken.ThrowIfCancellationRequested();
           var entryName = Path.GetRelativePath(fullSourceDirectory, filePath).Replace(Path.DirectorySeparatorChar, '/');
-          progress?.Report(entryName);
+          completedCount++;
+          progress?.Report(new ArchiveExportProgress(completedCount, files.Length, entryName));
           writer.Write(entryName, filePath);
         }
 
