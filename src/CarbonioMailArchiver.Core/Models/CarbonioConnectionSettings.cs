@@ -23,4 +23,5 @@ public sealed class CarbonioConnectionSettings
   public int DownloadSpeedLimitKbps { get; set; }
   public int DownloadRetryCount { get; set; } = 3;
   public int DownloadRetryDelaySeconds { get; set; } = 10;
+  public int SevenZipCompressionLevel { get; set; } = 5;
 }

@@ -2,6 +2,25 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.3] - 2026-08-04
+
+- Verificata e predisposta la creazione integrata di archivi `.7z` senza eseguibile esterno di 7-Zip.
+- Aggiunta configurazione del livello di compressione 7z con profili Veloce, Normale, Bilanciata e Massima.
+- Aggiunto pulsante `Comprimi EML`: verifica i download EML, crea l'archivio `.7z` della casella e rimuove la cartella non compressa solo a compressione riuscita.
+- Aggiunto pulsante `Apri Download` nella scheda Info e tradotti in italiano i pulsanti della scheda.
+
+## [1.8.2] - 2026-08-04
+
+- Aggiunto download EML con progressi, ETA, velocita' e controlli di annullamento più robusti.
+- Introdotti resume e retry sul download EML con ripartenza dei file incompleti.
+- Aggiunta verifica EML dei file gia' presenti e correzione dei timestamp sui messaggi scaricati.
+
+## [1.8.1] - 2026-08-04
+
+- Aggiunta scheda Configurazione per le opzioni operative e la persistenza della cartella download EML.
+- Aggiunta selezione della cartella download EML tramite finestra cartelle di Windows.
+- Aggiunta persistenza di sorgente, destinazione e data di ricerca.
+
 ## [1.7.8] - 2026-08-03
 
 - Spostata su thread di background la verifica/riparazione timestamp EML per mantenere reattiva la finestra.

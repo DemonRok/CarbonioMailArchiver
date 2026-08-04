@@ -132,15 +132,16 @@
                                     Margin="350,0,0,12" />
 
                             <WrapPanel Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
-                                <Button Content="Salva" Command="{Binding SaveCommand}" Width="96" Margin="0,0,8,8" />
-                                <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="130" Margin="0,0,8,8" />
-                                <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="120" Margin="0,0,8,8" />
-                                <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="110" Margin="0,0,8,8" />
+                                <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="140" Margin="0,0,8,8" />
                                 <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="120" Margin="0,0,8,8" />
-                                <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="110" Margin="0,0,8,8" />
-                                <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="110" Margin="0,0,8,8" />
-                                <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="110" Margin="0,0,8,8" />
+                                <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" Width="140" Margin="0,0,8,8" />
                             </WrapPanel>
                         </Grid>
                     </ScrollViewer>
@@ -258,6 +259,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Timeout SOAP" VerticalAlignment="Center" Margin="0,0,12,12" />
@@ -327,10 +329,18 @@
                     </Grid>
 
                     <TextBlock Grid.Row="2" Text="Cartella download EML" VerticalAlignment="Center" Margin="0,0,12,12" />
-                    <TextBox Grid.Row="2"
-                             Grid.Column="1"
-                             Text="{Binding DownloadRootDirectory, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,12" />
+                    <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding DownloadRootDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="1"
+                                Content="Sfoglia..."
+                                Command="{Binding BrowseDownloadRootDirectoryCommand}"
+                                Width="96"
+                                Margin="8,0,0,0" />
+                    </Grid>
 
                     <TextBlock Grid.Row="3" Text="Velocita' download" VerticalAlignment="Center" Margin="0,0,12,12" />
                     <Grid Grid.Row="3" Grid.Column="1" Margin="0,0,0,12" HorizontalAlignment="Left">
@@ -385,22 +395,31 @@
                         <TextBlock Grid.Column="6" Text="progressivo: delay × tentativo" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#555" />
                     </Grid>
 
-                    <CheckBox Grid.Row="5"
+                    <TextBlock Grid.Row="5" Text="Compressione 7z" VerticalAlignment="Center" Margin="0,0,12,12" />
+                    <ComboBox Grid.Row="5"
+                              Grid.Column="1"
+                              ItemsSource="{Binding SevenZipCompressionLevels}"
+                              SelectedItem="{Binding SelectedSevenZipCompressionLevel, Mode=TwoWay}"
+                              Width="160"
+                              HorizontalAlignment="Left"
+                              Margin="0,0,0,12" />
+
+                    <CheckBox Grid.Row="6"
                               Grid.Column="1"
                               Content="Carica cartelle all'avvio se la password e' disponibile"
                               IsChecked="{Binding AutoLoadFoldersOnStartup}"
                               Margin="0,0,0,10" />
-                    <CheckBox Grid.Row="6"
+                    <CheckBox Grid.Row="7"
                               Grid.Column="1"
                               Content="Logging diagnostico API/SOAP (senza password)"
                               IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
                               Margin="0,0,0,10" />
-                    <CheckBox Grid.Row="7"
+                    <CheckBox Grid.Row="8"
                               Grid.Column="1"
                               Content="Chiedi se esportare il report CSV al termine dello spostamento"
                               IsChecked="{Binding PromptReportExportAfterMove}"
                               Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Margin="0,12,0,0">
                         <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta di spostamento." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -408,11 +427,12 @@
                         <TextBlock Text="• Cartella download EML: directory locale in cui creare la cartella della casella e l'albero delle cartelle scaricate." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Velocita' download: limite in KB/s per non saturare la connessione; 0 lascia il download senza throttling." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Retry download: tentativi per ogni singola email; il delay cresce moltiplicando il valore base per il numero del tentativo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Compressione 7z: livello usato per creare archivi 7z dai download EML; livelli piu' alti richiedono piu' tempo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
                         <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                     </StackPanel>
-                    <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
+                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
                         <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" Margin="0,0,10,0" />
                         <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" />
                     </StackPanel>
@@ -485,14 +505,15 @@
                     <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ExecutableDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
 
                     <WrapPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,0,0,16">
-                        <Button Content="Open AppData" Command="{Binding OpenAppDataCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Open Logs" Command="{Binding OpenLogsCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Open Reports" Command="{Binding OpenReportsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri AppData" Command="{Binding OpenAppDataCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Log" Command="{Binding OpenLogsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Download" Command="{Binding OpenDownloadsCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Report" Command="{Binding OpenReportsCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Apri ultimo report" Command="{Binding OpenLastReportCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Open Repository" Command="{Binding OpenRepositoryCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Report Issue" Command="{Binding ReportIssueCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Open Releases" Command="{Binding OpenReleasesCommand}" Width="178" Margin="0,0,10,8" />
-                        <Button Content="Open License" Command="{Binding OpenLicenseCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Repository" Command="{Binding OpenRepositoryCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Segnala problema" Command="{Binding ReportIssueCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Release" Command="{Binding OpenReleasesCommand}" Width="178" Margin="0,0,10,8" />
+                        <Button Content="Apri Licenza" Command="{Binding OpenLicenseCommand}" Width="178" Margin="0,0,10,8" />
                     </WrapPanel>
 
                 </Grid>

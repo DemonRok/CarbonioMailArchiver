@@ -15,6 +15,7 @@ using CarbonioMailArchiver.Core.Models;
 using CarbonioMailArchiver.Infrastructure.Configuration;
 using CarbonioMailArchiver.Infrastructure.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32;
 
 namespace CarbonioMailArchiver.App.ViewModels;
 
@@ -31,6 +32,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private readonly IMoveDiagnosticService _moveDiagnosticService;
   private readonly IMessageDownloadService _messageDownloadService;
   private readonly IOperationReportService _operationReportService;
+  private readonly IArchiveExportService _archiveExportService;
   private readonly ILogger<MainWindowViewModel> _logger;
   private string _baseUrl = string.Empty;
   private string _soapUrl = string.Empty;
@@ -54,6 +56,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private int _downloadSpeedLimitKbps;
   private int _downloadRetryCount = 3;
   private int _downloadRetryDelaySeconds = 10;
+  private SevenZipCompressionLevelOption _selectedSevenZipCompressionLevel = SevenZipCompressionLevelOption.Default;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -96,6 +99,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     string Message,
     IReadOnlyList<string> MessageIds);
 
+  public sealed record SevenZipCompressionLevelOption(string Name, int Level)
+  {
+    public static SevenZipCompressionLevelOption Default { get; } = new("Bilanciata", 5);
+    public override string ToString() => Name;
+  }
+
   public MainWindowViewModel(
     AppConfiguration configuration,
     ICredentialStore credentialStore,
@@ -108,6 +117,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     IMoveDiagnosticService moveDiagnosticService,
     IMessageDownloadService messageDownloadService,
     IOperationReportService operationReportService,
+    IArchiveExportService archiveExportService,
     ILogger<MainWindowViewModel> logger)
   {
     _configuration = configuration;
@@ -121,6 +131,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _moveDiagnosticService = moveDiagnosticService;
     _messageDownloadService = messageDownloadService;
     _operationReportService = operationReportService;
+    _archiveExportService = archiveExportService;
     _logger = logger;
 
     LoadCommand = new AsyncRelayCommand(LoadAsync);
@@ -136,6 +147,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     CancelMoveCommand = _cancelMoveCommand;
     DownloadMessagesCommand = new AsyncRelayCommand(DownloadMessagesAsync, () => !IsMoveInProgress);
     VerifyDownloadedMessagesCommand = new AsyncRelayCommand(VerifyDownloadedMessagesAsync, () => !IsMoveInProgress);
+    CompressMessagesCommand = new AsyncRelayCommand(CompressMessagesAsync, () => !IsMoveInProgress);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -143,12 +155,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OpenAppDataCommand = new AsyncRelayCommand(() => OpenPathAsync(ApplicationDirectory));
     OpenLogsCommand = new AsyncRelayCommand(() => OpenPathAsync(LogDirectory));
     OpenReportsCommand = new AsyncRelayCommand(() => OpenPathAsync(ReportDirectory));
+    OpenDownloadsCommand = new AsyncRelayCommand(() => OpenPathAsync(GetEffectiveDownloadRootDirectory()));
     OpenLastReportCommand = new AsyncRelayCommand(OpenLastReportAsync);
     OpenRepositoryCommand = new AsyncRelayCommand(() => OpenPathAsync(RepositoryUrl));
     OpenReleasesCommand = new AsyncRelayCommand(() => OpenPathAsync(ReleasesUrl));
     OpenLicenseCommand = new AsyncRelayCommand(OpenLicenseAsync);
     ReportIssueCommand = new AsyncRelayCommand(() => OpenPathAsync(IssuesUrl));
     RestoreConfigurationDefaultsCommand = new AsyncRelayCommand(RestoreConfigurationDefaultsAsync);
+    BrowseDownloadRootDirectoryCommand = new AsyncRelayCommand(BrowseDownloadRootDirectoryAsync);
     DeleteSourceFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedSourceFolder, "sorgente"));
     DeleteDestinationFolderIfEmptyCommand = new AsyncRelayCommand(() => DeleteSelectedFolderIfEmptyAsync(SelectedDestinationFolder, "destinazione"));
   }
@@ -166,18 +180,21 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand CancelMoveCommand { get; }
   public ICommand DownloadMessagesCommand { get; }
   public ICommand VerifyDownloadedMessagesCommand { get; }
+  public ICommand CompressMessagesCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
   public ICommand OpenAppDataCommand { get; }
   public ICommand OpenLogsCommand { get; }
   public ICommand OpenReportsCommand { get; }
+  public ICommand OpenDownloadsCommand { get; }
   public ICommand OpenLastReportCommand { get; }
   public ICommand OpenRepositoryCommand { get; }
   public ICommand OpenReleasesCommand { get; }
   public ICommand OpenLicenseCommand { get; }
   public ICommand ReportIssueCommand { get; }
   public ICommand RestoreConfigurationDefaultsCommand { get; }
+  public ICommand BrowseDownloadRootDirectoryCommand { get; }
   public ICommand DeleteSourceFolderIfEmptyCommand { get; }
   public ICommand DeleteDestinationFolderIfEmptyCommand { get; }
   public ICommand DecreasePreviewMessageLimitCommand => new AsyncRelayCommand(() => UpdatePreviewMessageLimitAsync(-1));
@@ -195,6 +212,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ObservableCollection<string> RecentLogLines { get; } = [];
   public ObservableCollection<MailMessagePreviewViewModel> PreviewMessages { get; } = [];
   public ObservableCollection<FolderSelectionViewModel> AvailableFolders { get; } = [];
+  public IReadOnlyList<SevenZipCompressionLevelOption> SevenZipCompressionLevels { get; } =
+  [
+    new("Veloce", 1),
+    new("Normale", 3),
+    SevenZipCompressionLevelOption.Default,
+    new("Massima", 9)
+  ];
   public string LogDirectory { get; }
   public string ReportDirectory => _operationReportService.ReportDirectory;
   public string DefaultDownloadDirectory => Path.Combine(ExecutableDirectory, "Downloads");
@@ -382,6 +406,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _downloadRetryDelaySeconds, Math.Clamp(value, 1, 300));
   }
 
+  public SevenZipCompressionLevelOption SelectedSevenZipCompressionLevel
+  {
+    get => _selectedSevenZipCompressionLevel;
+    set => SetField(ref _selectedSevenZipCompressionLevel, value ?? SevenZipCompressionLevelOption.Default);
+  }
+
   public bool IsMoveInProgress
   {
     get => _isMoveInProgress;
@@ -399,6 +429,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       if (VerifyDownloadedMessagesCommand is AsyncRelayCommand verifyCommand)
       {
         verifyCommand.RaiseCanExecuteChanged();
+      }
+
+      if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
+      {
+        compressCommand.RaiseCanExecuteChanged();
       }
     }
   }
@@ -524,6 +559,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DownloadSpeedLimitKbps = Math.Clamp(settings.DownloadSpeedLimitKbps, 0, 10240);
     DownloadRetryCount = Math.Clamp(settings.DownloadRetryCount, 1, 10);
     DownloadRetryDelaySeconds = Math.Clamp(settings.DownloadRetryDelaySeconds, 1, 300);
+    SelectedSevenZipCompressionLevel = SevenZipCompressionLevels.FirstOrDefault(option => option.Level == Math.Clamp(settings.SevenZipCompressionLevel, 0, 9))
+      ?? SevenZipCompressionLevelOption.Default;
     if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
     {
       SearchBeforeDate = savedSearchBeforeDate;
@@ -1290,6 +1327,190 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
+  private async Task CompressMessagesAsync()
+  {
+    if (IsMoveInProgress)
+    {
+      return;
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    if (AvailableFolders.Count == 0)
+    {
+      await LoadFoldersAsync();
+    }
+
+    var rootFolder = ResolveDownloadRootFolder();
+    if (rootFolder is null)
+    {
+      StatusMessage = UseArchiveDestination
+        ? "Cartella /Archive non trovata. Carica le cartelle e verifica che Archivio sia attivo sul server."
+        : "Seleziona una cartella destinazione da comprimere, oppure abilita Archivio.";
+      return;
+    }
+
+    var foldersToVerify = GetFoldersUnder(rootFolder).ToArray();
+    if (foldersToVerify.Length == 0)
+    {
+      StatusMessage = $"Nessuna cartella da verificare per {rootFolder.AbsolutePath}.";
+      return;
+    }
+
+    var accountDownloadDirectory = Path.Combine(settings.DownloadRootDirectory, SanitizePathSegment(settings.Email));
+    if (!Directory.Exists(accountDownloadDirectory))
+    {
+      StatusMessage = $"Cartella download della casella non trovata: {accountDownloadDirectory}. Esegui prima Scarica EML.";
+      return;
+    }
+
+    var archivePath = Path.Combine(settings.DownloadRootDirectory, $"{SanitizePathSegment(settings.Email)}.7z");
+    var confirmation = MessageBox.Show(
+      $"Verificare e comprimere la cartella download della casella?\n\nCartella: {accountDownloadDirectory}\nArchivio: {archivePath}\n\nSe la compressione va a buon fine, la cartella non compressa verra' eliminata.",
+      "Conferma compressione EML",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Question,
+      MessageBoxResult.No);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      StatusMessage = "Compressione EML annullata.";
+      return;
+    }
+
+    await SaveSettingsSnapshotAsync();
+    var password = await GetPasswordAsync(settings);
+    using var compressionCancellation = new CancellationTokenSource();
+    _moveCancellationTokenSource = compressionCancellation;
+    IsMoveInProgress = true;
+    MoveProgressPercentage = 0;
+    MoveProgressPercentText = string.Empty;
+    MoveBatchText = string.Empty;
+    MoveDetailText = $"Verifica EML in {rootFolder.AbsolutePath}...";
+    MoveProgressText = MoveDetailText;
+    IsMoveProgressIndeterminate = true;
+    OperationMetricsText = string.Empty;
+    OperationDownloadedText = string.Empty;
+    OperationElapsedText = string.Empty;
+    OperationSpeedText = string.Empty;
+    OperationEtaText = string.Empty;
+    OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
+    OperationFileText = "Verifica in corso";
+    StatusMessage = MoveDetailText;
+
+    var verifyProgress = new Progress<MailDownloadProgress>(downloadProgress =>
+    {
+      OperationFolderText = $"Cartella: {downloadProgress.CurrentFolder}";
+      OperationFileText = downloadProgress.CurrentFile;
+      MoveDetailText = downloadProgress.TotalCount <= 0
+        ? "Verifica EML: conteggio messaggi in corso..."
+        : $"Verifica EML: presenti {downloadProgress.CompletedCount}/{downloadProgress.TotalCount}.";
+      MoveProgressText = MoveDetailText;
+      StatusMessage = MoveDetailText;
+    });
+
+    try
+    {
+      var verification = await _messageDownloadService.VerifyFolderTreeAsync(
+        settings,
+        password,
+        ToMailFolder(rootFolder),
+        foldersToVerify.Select(ToMailFolder).ToArray(),
+        settings.DownloadRootDirectory,
+        verifyProgress,
+        compressionCancellation.Token);
+
+      if (!verification.IsSuccess || verification.MissingCount > 0)
+      {
+        IsMoveProgressIndeterminate = false;
+        MoveProgressPercentage = verification.ExpectedCount == 0
+          ? 0
+          : Math.Clamp((int)Math.Round(verification.PresentCount * 100d / verification.ExpectedCount), 0, 100);
+        MoveProgressPercentText = verification.ExpectedCount == 0 ? string.Empty : $"{MoveProgressPercentage}%";
+        MoveDetailText = $"Compressione interrotta: verifica EML non completa. {verification.Message}";
+        MoveProgressText = MoveDetailText;
+        StatusMessage = MoveDetailText;
+        await RefreshLogsAsync();
+        return;
+      }
+
+      IsMoveProgressIndeterminate = true;
+      MoveProgressPercentText = string.Empty;
+      MoveDetailText = $"Compressione 7z in corso da {accountDownloadDirectory}...";
+      MoveProgressText = MoveDetailText;
+      OperationFolderText = $"Cartella: {accountDownloadDirectory}";
+      OperationFileText = "Preparazione archivio";
+      StatusMessage = MoveDetailText;
+
+      var archiveProgress = new Progress<string>(entryName =>
+      {
+        OperationFileText = $"File: {entryName}";
+        StatusMessage = "Compressione 7z in corso...";
+      });
+
+      var createdArchivePath = await _archiveExportService.CreateSevenZipAsync(
+        accountDownloadDirectory,
+        archivePath,
+        settings.SevenZipCompressionLevel,
+        archiveProgress,
+        compressionCancellation.Token);
+
+      compressionCancellation.Token.ThrowIfCancellationRequested();
+      if (!File.Exists(createdArchivePath))
+      {
+        throw new IOException($"Archivio 7z non trovato dopo la creazione: {createdArchivePath}");
+      }
+
+      OperationFileText = "Eliminazione cartella non compressa";
+      await Task.Run(
+        () =>
+        {
+          compressionCancellation.Token.ThrowIfCancellationRequested();
+          Directory.Delete(accountDownloadDirectory, true);
+        },
+        compressionCancellation.Token);
+
+      IsMoveProgressIndeterminate = false;
+      MoveProgressPercentage = 100;
+      MoveProgressPercentText = "100%";
+      MoveBatchText = "Compressione completata";
+      MoveDetailText = $"Archivio 7z creato: {createdArchivePath}. Cartella non compressa eliminata.";
+      MoveProgressText = MoveDetailText;
+      OperationFolderText = $"Archivio: {createdArchivePath}";
+      OperationFileText = string.Empty;
+      StatusMessage = MoveDetailText;
+      await RefreshLogsAsync();
+      MessageBox.Show(
+        "Compressione EML completata.",
+        "Compressione completata",
+        MessageBoxButton.OK,
+        MessageBoxImage.Information);
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = "Compressione EML annullata dall'utente.";
+      ResetMoveProgress();
+      await RefreshLogsAsync();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException or TaskCanceledException)
+    {
+      _logger.LogWarning(ex, "Compressione EML non completata per {Account}.", settings.Email);
+      StatusMessage = $"Compressione EML non completata: {ex.Message}";
+      IsMoveProgressIndeterminate = false;
+      await RefreshLogsAsync();
+    }
+    finally
+    {
+      IsMoveInProgress = false;
+      _moveCancellationTokenSource = null;
+    }
+  }
+
   private async Task<IReadOnlyList<SourceFolderScan>> ScanSourceFoldersAsync(
     CarbonioConnectionSettings settings,
     string password,
@@ -1662,7 +1883,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DownloadSpeedLimitKbps = 0;
     DownloadRetryCount = 3;
     DownloadRetryDelaySeconds = 10;
+    SelectedSevenZipCompressionLevel = SevenZipCompressionLevelOption.Default;
     StatusMessage = "Default configurazione ripristinati. Premi Salva configurazione per renderli permanenti.";
+    return Task.CompletedTask;
+  }
+
+  private Task BrowseDownloadRootDirectoryAsync()
+  {
+    var dialog = new OpenFolderDialog
+    {
+      Title = "Seleziona cartella download EML",
+      Multiselect = false,
+      InitialDirectory = Directory.Exists(DownloadRootDirectory) ? DownloadRootDirectory : DefaultDownloadDirectory
+    };
+
+    if (dialog.ShowDialog() == true)
+    {
+      DownloadRootDirectory = dialog.FolderName;
+      StatusMessage = $"Cartella download EML selezionata: {DownloadRootDirectory}";
+    }
+
     return Task.CompletedTask;
   }
 
@@ -1714,6 +1954,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     return Task.CompletedTask;
   }
 
+  private string GetEffectiveDownloadRootDirectory()
+  {
+    return string.IsNullOrWhiteSpace(DownloadRootDirectory) ? DefaultDownloadDirectory : DownloadRootDirectory.Trim();
+  }
+
+  private static string SanitizePathSegment(string value)
+  {
+    var invalidChars = Path.GetInvalidFileNameChars();
+    var sanitized = new string(value
+      .Select(character => invalidChars.Contains(character) ? '_' : character)
+      .ToArray());
+    return string.IsNullOrWhiteSpace(sanitized) ? "_" : sanitized.Trim();
+  }
+
   private CarbonioConnectionSettings ToSettings()
   {
     return new CarbonioConnectionSettings
@@ -1738,6 +1992,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       DownloadSpeedLimitKbps = Math.Clamp(DownloadSpeedLimitKbps, 0, 10240),
       DownloadRetryCount = Math.Clamp(DownloadRetryCount, 1, 10),
       DownloadRetryDelaySeconds = Math.Clamp(DownloadRetryDelaySeconds, 1, 300),
+      SevenZipCompressionLevel = Math.Clamp(SelectedSevenZipCompressionLevel.Level, 0, 9),
       SearchBeforeDate = TryParseSearchBeforeDate(out var beforeDate) ? beforeDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) : SearchBeforeDate.Trim()
     };
   }

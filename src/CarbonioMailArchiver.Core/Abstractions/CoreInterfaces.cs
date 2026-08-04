@@ -105,6 +105,11 @@ public interface IOperationReportService
   string ReportDirectory { get; }
 }
 
+public interface IArchiveExportService
+{
+  Task<string> CreateSevenZipAsync(string sourceDirectory, string archivePath, int compressionLevel, IProgress<string>? progress, CancellationToken cancellationToken);
+}
+
 public interface ICsvExportService
 {
   Task ExportPreviewAsync(string path, IEnumerable<MailMessageSummary> messages, CancellationToken cancellationToken);
