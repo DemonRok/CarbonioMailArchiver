@@ -41,7 +41,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Image Source="Assets/app-icon.png" Width="44" Height="44" VerticalAlignment="Top" Margin="0,2,14,0" />
+            <Image Source="pack://application:,,,/CarbonioMailArchiver.App;component/Assets/app-icon.png" Width="40" Height="40" VerticalAlignment="Top" Margin="0,2,12,0" />
             <StackPanel Grid.Column="1">
                 <TextBlock Text="Carbonio Mail Archiver" FontSize="24" FontWeight="SemiBold" />
                 <TextBlock Text="Ricerca, conteggio, spostamento, download e compressione delle email Carbonio via API server, con log e report CSV." Foreground="#555" Margin="0,4,0,0" TextWrapping="Wrap" />
