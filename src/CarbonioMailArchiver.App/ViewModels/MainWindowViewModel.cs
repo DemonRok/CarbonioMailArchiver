@@ -365,6 +365,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _lastDestinationFolderId = value.Id;
       }
 
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DestinationFolderDisplayText)));
       InvalidateDownloadVerification();
     }
   }
@@ -382,11 +383,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       _useArchiveDestination = value;
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UseArchiveDestination)));
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDestinationFolderSelectionEnabled)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DestinationFolderDisplayText)));
       InvalidateDownloadVerification();
     }
   }
 
   public bool IsDestinationFolderSelectionEnabled => !UseArchiveDestination;
+
+  public string DestinationFolderDisplayText => UseArchiveDestination
+    ? "/Archive"
+    : SelectedDestinationFolder?.DisplayName ?? string.Empty;
 
   public bool IncludeSourceSubfolders
   {
