@@ -1389,6 +1389,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationFileText = "Verifica in corso";
     StatusMessage = MoveDetailText;
     BeginOperationMetrics();
+    StartOperationMetricsTimer();
 
     var progress = new Progress<MailDownloadProgress>(verifyProgress =>
     {
@@ -1461,6 +1462,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
     finally
     {
+      StopOperationMetricsTimer();
       IsMoveInProgress = false;
       _moveCancellationTokenSource = null;
     }
