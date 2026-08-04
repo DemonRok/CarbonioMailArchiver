@@ -2113,8 +2113,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     try
     {
       var plan = await _folderMaintenanceService.AnalyzeEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
+      _logger.LogInformation(
+        "Analisi cartelle vuote completata per {Account}. Cartella: {Folder}. Candidati: {CandidateCount}. Include sottocartelle: {IncludeSubfolders}.",
+        settings.Email,
+        folder.AbsolutePath,
+        plan.CandidatePaths.Count,
+        IncludeSourceSubfolders);
       if (!plan.IsSuccess || plan.CandidatePaths.Count == 0)
       {
+        _logger.LogInformation(
+          "Nessuna cartella vuota cestinabile per {Account}. Cartella: {Folder}. Messaggio: {Message}.",
+          settings.Email,
+          folder.AbsolutePath,
+          plan.Message);
         StatusMessage = plan.Message;
         await RefreshLogsAsync();
         return;
@@ -2135,12 +2146,25 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       var result = await _folderMaintenanceService.TrashEmptyFoldersAsync(settings, password, folder.Id, IncludeSourceSubfolders, CancellationToken.None);
+      _logger.LogInformation(
+        "Spostamento cartelle vuote nel cestino completato per {Account}. Cartella: {Folder}. Spostate: {MovedCount}. Esito: {Success}. Messaggio: {Message}.",
+        settings.Email,
+        folder.AbsolutePath,
+        result.MovedToTrashCount,
+        result.IsSuccess,
+        result.Message);
       StatusMessage = result.Message;
       await LoadFoldersAsync();
       await RefreshLogsAsync();
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
     {
+      _logger.LogWarning(
+        ex,
+        "Spostamento cartella nel cestino non completato per {Account}. Cartella: {Folder}. Include sottocartelle: {IncludeSubfolders}.",
+        settings.Email,
+        folder.AbsolutePath,
+        IncludeSourceSubfolders);
       StatusMessage = $"Spostamento cartella nel cestino non completato: {ex.Message}";
       await RefreshLogsAsync();
     }
