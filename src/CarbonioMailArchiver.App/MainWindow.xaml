@@ -300,13 +300,13 @@
                             </Grid>
                         </Grid>
 
-                        <TextBlock Grid.Column="2" Text="Batch move (10-100)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Grid.Column="2" Text="Batch move (10-500)" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <Grid Grid.Column="3" Margin="0,0,20,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="54" />
                                 <ColumnDefinition Width="18" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Text="{Binding BatchSize, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
+                            <TextBox Text="{Binding BatchSize, UpdateSourceTrigger=LostFocus}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" PreviewTextInput="NumericTextBox_OnPreviewTextInput" DataObject.Pasting="NumericTextBox_OnPasting" />
                             <Grid Grid.Column="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*" />

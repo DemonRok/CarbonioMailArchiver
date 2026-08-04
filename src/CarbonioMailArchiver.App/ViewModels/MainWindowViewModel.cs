@@ -62,7 +62,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
-  private int _batchSize = 50;
+  private int _batchSize = 250;
   private int _maxMessagesToMove;
   private int _moveProgressPercentage;
   private bool _isMoveProgressIndeterminate;
@@ -77,6 +77,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _operationEtaText = string.Empty;
   private string _operationFolderText = string.Empty;
   private string _operationFileText = string.Empty;
+  private DateTimeOffset _operationStartedAt = DateTimeOffset.MinValue;
+  private TimeSpan _operationSpeedWarmupThreshold = TimeSpan.FromSeconds(50);
+  private TimeSpan _operationEtaWarmupThreshold = TimeSpan.FromSeconds(75);
+  private string _stableOperationEtaText = "ETA in calcolo";
+  private DateTimeOffset _lastOperationEtaUpdate = DateTimeOffset.MinValue;
+  private bool _operationMetricsVisible;
   private MailDownloadProgress? _lastDownloadProgress;
   private string _stableDownloadEtaText = "ETA in calcolo";
   private DateTimeOffset _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
@@ -438,7 +444,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public int BatchSize
   {
     get => _batchSize;
-    set => SetField(ref _batchSize, Math.Clamp(value, 10, 100));
+    set => SetField(ref _batchSize, Math.Clamp(value, 10, 500));
   }
 
   public int MaxMessagesToMove
@@ -623,7 +629,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
     TimeoutSeconds = settings.TimeoutSeconds;
     PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
-    BatchSize = Math.Clamp(settings.BatchSize, 10, 100);
+    BatchSize = Math.Clamp(settings.BatchSize, 10, 500);
     MaxMessagesToMove = Math.Max(settings.MaxMessagesToMove, 0);
     DownloadRootDirectory = string.IsNullOrWhiteSpace(settings.DownloadRootDirectory)
       ? DefaultDownloadDirectory
@@ -893,7 +899,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var sourceFolder = SelectedSourceFolder!;
     var destinationFolder = GetPlannedDestinationFolder(sourceFolder);
     await SaveSettingsSnapshotAsync();
-    var batchSize = Math.Clamp(BatchSize, 10, 100);
+    var batchSize = Math.Clamp(BatchSize, 10, 500);
     var maxMessagesToMove = Math.Max(MaxMessagesToMove, 0);
     var password = await GetPasswordAsync(settings);
     using var moveCancellation = new CancellationTokenSource();
@@ -907,6 +913,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveDetailText = MoveProgressText;
 
     StatusMessage = MoveProgressText;
+    BeginOperationMetrics();
     IReadOnlyList<SourceFolderScan> folderScans;
     try
     {
@@ -918,6 +925,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveProgressText = "Conteggio annullato.";
       MoveBatchText = "Conteggio annullato";
       MoveDetailText = MoveProgressText;
+      ClearOperationMetrics();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -927,6 +935,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     if (failedScan is not null)
     {
       StatusMessage = failedScan.Message;
+      ClearOperationMetrics();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -937,6 +946,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = "Nessun messaggio trovato da spostare.";
       PreviewMessages.Clear();
+      ClearOperationMetrics();
       await RefreshLogsAsync();
       ResetMoveProgress();
       return;
@@ -948,6 +958,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = "Pronto";
     MoveProgressText = $"Pronto a spostare {expectedTotal} messaggi.";
     MoveDetailText = MoveProgressText;
+    UpdateOperationMetrics(0, expectedTotal, string.Empty);
     var totalDescription = expectedTotal.ToString(CultureInfo.InvariantCulture);
     var limitDescription = maxMessagesToMove == 0
       ? "tutti i messaggi trovati"
@@ -1016,8 +1027,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
           moveCancellation.Token.ThrowIfCancellationRequested();
           batchNumber++;
           UpdateMoveProgress(movedCount, expectedTotal, $"Batch {batchNumber} in corso", $"{folderScan.SourceFolder.AbsolutePath}: spostati finora {movedCount}/{expectedTotal} messaggi.");
+          UpdateOperationMetrics(movedCount, expectedTotal, folderScan.SourceFolder.AbsolutePath);
           StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
-          var moveResult = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIdBatch, destinationFolder.Id, moveCancellation.Token);
+          var moveResult = await MoveMessagesWithRetryAsync(
+            settings,
+            password,
+            messageIdBatch,
+            destinationFolder.Id,
+            settings.DownloadRetryCount,
+            settings.DownloadRetryDelaySeconds,
+            moveCancellation.Token);
           if (!moveResult.IsSuccess)
           {
             foreach (var failedId in messageIdBatch)
@@ -1049,6 +1068,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
           var previousMovedCount = movedCount;
           movedCount += moveResult.MovedCount;
+          UpdateOperationMetrics(movedCount, expectedTotal, folderScan.SourceFolder.AbsolutePath);
           await AnimateMoveProgressAsync(previousMovedCount, movedCount, expectedTotal, $"Batch {batchNumber} completato", moveCancellation.Token);
           _logger.LogInformation(
             "Spostamento batch {BatchNumber} completato. Cartella: {SourceFolder}. Messaggi spostati nel batch: {BatchMoved}. Totale spostato: {MovedCount}.",
@@ -1061,6 +1081,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
       PreviewMessages.Clear();
       UpdateMoveProgress(movedCount, movedCount, "Spostamento completato", $"{movedCount} messaggi spostati.");
+      UpdateOperationMetrics(movedCount, movedCount, sourceFolder.AbsolutePath);
       var successReportPath = await AskAndSaveMoveReportAsync(
         operationStartedAt,
         settings.Email,
@@ -1094,6 +1115,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveProgressText = "Spostamento annullato.";
       MoveBatchText = "Spostamento annullato";
       MoveDetailText = "L'eventuale batch gia' inviato potrebbe essere stato completato dal server.";
+      ClearOperationMetrics();
       await RefreshLogsAsync();
     }
     finally
@@ -1152,6 +1174,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
+    var batchSize = Math.Clamp(BatchSize, 10, 500);
     var speedText = DownloadSpeedLimitKbps == 0
       ? "senza limite di velocita'"
       : $"{DownloadSpeedLimitKbps.ToString(CultureInfo.InvariantCulture)} KB/s";
@@ -1225,6 +1248,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToMailFolder(rootFolder),
         foldersToDownload.Select(ToMailFolder).ToArray(),
         settings.DownloadRootDirectory,
+        batchSize,
         settings.DownloadSpeedLimitKbps,
         settings.DownloadRetryCount,
         settings.DownloadRetryDelaySeconds,
@@ -1328,6 +1352,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
+    var batchSize = Math.Clamp(BatchSize, 10, 500);
     using var verifyCancellation = new CancellationTokenSource();
     _moveCancellationTokenSource = verifyCancellation;
     IsMoveInProgress = true;
@@ -1345,6 +1370,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
     OperationFileText = "Verifica in corso";
     StatusMessage = MoveDetailText;
+    BeginOperationMetrics();
 
     var progress = new Progress<MailDownloadProgress>(verifyProgress =>
     {
@@ -1354,6 +1380,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? "Verifica EML: conteggio messaggi in corso..."
         : $"Verifica EML: presenti {verifyProgress.CompletedCount}/{verifyProgress.TotalCount}.";
       MoveProgressText = MoveDetailText;
+      UpdateOperationMetrics(verifyProgress.CompletedCount, verifyProgress.TotalCount, verifyProgress.CurrentFolder);
       StatusMessage = MoveDetailText;
     });
 
@@ -1365,6 +1392,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToMailFolder(rootFolder),
         foldersToVerify.Select(ToMailFolder).ToArray(),
         settings.DownloadRootDirectory,
+        batchSize,
         progress,
         verifyCancellation.Token);
 
@@ -1378,6 +1406,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
       OperationFileText = $"Percorso locale: {result.TargetDirectory}";
       StatusMessage = result.Message;
+      UpdateOperationMetrics(result.PresentCount, result.ExpectedCount, rootFolder.AbsolutePath);
       _downloadVerificationSucceeded = result.IsSuccess && result.MissingCount == 0;
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
@@ -1390,6 +1419,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = "Verifica EML annullata dall'utente.";
       _downloadVerificationSucceeded = false;
+      ClearOperationMetrics();
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
         compressCommand.RaiseCanExecuteChanged();
@@ -1403,6 +1433,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = $"Verifica EML non completata: {ex.Message}";
       IsMoveProgressIndeterminate = false;
       _downloadVerificationSucceeded = false;
+      ClearOperationMetrics();
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
         compressCommand.RaiseCanExecuteChanged();
@@ -1490,6 +1521,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
+    var batchSize = Math.Clamp(BatchSize, 10, 500);
     using var compressionCancellation = new CancellationTokenSource();
     _moveCancellationTokenSource = compressionCancellation;
     IsMoveInProgress = true;
@@ -1507,6 +1539,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
     OperationFileText = "Verifica in corso";
     StatusMessage = MoveDetailText;
+    BeginOperationMetrics();
 
     var verifyProgress = new Progress<MailDownloadProgress>(downloadProgress =>
     {
@@ -1527,6 +1560,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ToMailFolder(rootFolder),
         foldersToVerify.Select(ToMailFolder).ToArray(),
         settings.DownloadRootDirectory,
+        batchSize,
         verifyProgress,
         compressionCancellation.Token);
 
@@ -1540,6 +1574,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         MoveDetailText = $"Compressione interrotta: verifica EML non completa. {verification.Message}";
         MoveProgressText = MoveDetailText;
         StatusMessage = MoveDetailText;
+        ClearOperationMetrics();
         await RefreshLogsAsync();
         return;
       }
@@ -1589,6 +1624,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       OperationFolderText = $"Archivio: {createdArchivePath}";
       OperationFileText = string.Empty;
       StatusMessage = MoveDetailText;
+      ClearOperationMetrics();
       await RefreshLogsAsync();
       MessageBox.Show(
         "Compressione EML completata.",
@@ -1600,6 +1636,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = "Compressione EML annullata dall'utente.";
       ResetMoveProgress();
+      ClearOperationMetrics();
       await RefreshLogsAsync();
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException or TaskCanceledException)
@@ -1607,6 +1644,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       _logger.LogWarning(ex, "Compressione EML non completata per {Account}.", settings.Email);
       StatusMessage = $"Compressione EML non completata: {ex.Message}";
       IsMoveProgressIndeterminate = false;
+      ClearOperationMetrics();
       await RefreshLogsAsync();
     }
     finally
@@ -1997,7 +2035,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return;
       }
 
-      var scope = IncludeSourceSubfolders ? "cartelle vuote trovate nel ramo selezionato" : "cartella selezionata";
       PreviewMessages.Clear();
       foreach (var candidatePath in plan.CandidatePaths)
       {
@@ -2005,13 +2042,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
       StatusMessage = $"Cartelle vuote candidate: {plan.CandidatePaths.Count}. Controlla la preview prima di confermare.";
 
-      var confirmation = MessageBox.Show(
-        $"Spostare nel cestino {plan.CandidatePaths.Count} {scope}?\n\nL'elenco completo e' visibile nella preview.",
-        "Conferma spostamento cartelle vuote nel cestino",
-        MessageBoxButton.YesNo,
-        MessageBoxImage.Warning,
-        MessageBoxResult.No);
-      if (confirmation != MessageBoxResult.Yes)
+      var confirmation = await ShowFolderDeleteConfirmationAsync(plan.CandidatePaths.Count, IncludeSourceSubfolders);
+      if (confirmation != true)
       {
         StatusMessage = "Spostamento cartelle vuote nel cestino annullato.";
         return;
@@ -2029,6 +2061,27 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
+  private Task<bool?> ShowFolderDeleteConfirmationAsync(int candidateCount, bool includeSubfolders)
+  {
+    var scope = includeSubfolders ? "cartelle vuote trovate nel ramo selezionato" : "cartella selezionata";
+    var summary = $"Spostare nel cestino {candidateCount} {scope}?";
+    var detail = "L'elenco completo resta visibile nella preview della finestra principale.";
+
+    var tcs = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
+    Application.Current.Dispatcher.InvokeAsync(() =>
+    {
+      var owner = Application.Current.MainWindow;
+      var window = new FolderDeleteConfirmationWindow(summary, detail)
+      {
+        Owner = owner
+      };
+      window.Closed += (_, _) => tcs.TrySetResult(window.DialogResult);
+      window.Show();
+    });
+
+    return tcs.Task;
+  }
+
   private Task UpdatePreviewMessageLimitAsync(int delta)
   {
     PreviewMessageLimit = Math.Clamp(PreviewMessageLimit + delta, 1, 100);
@@ -2037,7 +2090,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private Task UpdateBatchSizeAsync(int delta)
   {
-    BatchSize = Math.Clamp(BatchSize + delta, 10, 100);
+    BatchSize = Math.Clamp(BatchSize + delta, 10, 500);
     return Task.CompletedTask;
   }
 
@@ -2069,7 +2122,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     TimeoutSeconds = 100;
     PreviewMessageLimit = 10;
-    BatchSize = 50;
+    BatchSize = 250;
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
     UseArchiveDestination = false;
@@ -2182,7 +2235,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AutoLoadFoldersOnStartup = AutoLoadFoldersOnStartup,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600),
       PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100),
-      BatchSize = Math.Clamp(BatchSize, 10, 100),
+      BatchSize = Math.Clamp(BatchSize, 10, 500),
       MaxMessagesToMove = Math.Max(MaxMessagesToMove, 0),
       PromptReportExportAfterMove = PromptReportExportAfterMove,
       DownloadRootDirectory = string.IsNullOrWhiteSpace(DownloadRootDirectory) ? DefaultDownloadDirectory : DownloadRootDirectory.Trim(),
@@ -2323,6 +2376,107 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
+  private void BeginOperationMetrics()
+  {
+    _operationStartedAt = DateTimeOffset.Now;
+    _operationSpeedWarmupThreshold = TimeSpan.FromSeconds(Random.Shared.Next(50, 101));
+    _operationEtaWarmupThreshold = _operationSpeedWarmupThreshold + TimeSpan.FromSeconds(Random.Shared.Next(15, 61));
+    _stableOperationEtaText = "ETA in calcolo";
+    _lastOperationEtaUpdate = DateTimeOffset.MinValue;
+    _operationMetricsVisible = true;
+    OperationElapsedText = "Trascorso: 0s";
+    OperationSpeedText = "Velocita': in calcolo";
+    OperationEtaText = "ETA: in calcolo";
+  }
+
+  private void UpdateOperationMetrics(int completedCount, int? totalCount, string currentLabel)
+  {
+    if (!_operationMetricsVisible)
+    {
+      return;
+    }
+
+    var elapsed = _operationStartedAt == DateTimeOffset.MinValue
+      ? TimeSpan.Zero
+      : DateTimeOffset.Now - _operationStartedAt;
+    if (elapsed < TimeSpan.Zero)
+    {
+      elapsed = TimeSpan.Zero;
+    }
+
+    var speedText = elapsed < _operationSpeedWarmupThreshold || completedCount <= 0
+      ? "in calcolo"
+      : $"{completedCount / Math.Max(elapsed.TotalSeconds, 1):F1} msg/s";
+
+    if (totalCount is > 0
+      && completedCount > 0
+      && elapsed >= _operationEtaWarmupThreshold
+      && (_lastOperationEtaUpdate == DateTimeOffset.MinValue || DateTimeOffset.Now - _lastOperationEtaUpdate >= DownloadEtaRefreshInterval))
+    {
+      var remainingCount = Math.Max(totalCount.Value - completedCount, 0);
+      var messagesPerSecond = completedCount / Math.Max(elapsed.TotalSeconds, 1);
+      _stableOperationEtaText = $"ETA: {FormatDuration(TimeSpan.FromSeconds(remainingCount / Math.Max(messagesPerSecond, 0.0001)))}";
+      _lastOperationEtaUpdate = DateTimeOffset.Now;
+    }
+
+    OperationElapsedText = $"Trascorso: {FormatDuration(elapsed)}";
+    OperationSpeedText = $"Velocita': {speedText}";
+    OperationEtaText = _stableOperationEtaText.StartsWith("ETA:", StringComparison.Ordinal)
+      ? _stableOperationEtaText
+      : "ETA: in calcolo";
+    if (!string.IsNullOrWhiteSpace(currentLabel))
+    {
+      OperationFolderText = $"Cartella: {currentLabel}";
+    }
+  }
+
+  private void ClearOperationMetrics()
+  {
+    _operationMetricsVisible = false;
+    _operationStartedAt = DateTimeOffset.MinValue;
+    _stableOperationEtaText = "ETA in calcolo";
+    _lastOperationEtaUpdate = DateTimeOffset.MinValue;
+    OperationElapsedText = string.Empty;
+    OperationSpeedText = string.Empty;
+    OperationEtaText = string.Empty;
+  }
+
+  private async Task<MailMoveResult> MoveMessagesWithRetryAsync(
+    CarbonioConnectionSettings settings,
+    string password,
+    IReadOnlyList<string> messageIds,
+    string destinationFolderId,
+    int retryCount,
+    int retryDelaySeconds,
+    CancellationToken cancellationToken)
+  {
+    var attempts = Math.Max(retryCount, 1);
+    var delaySeconds = Math.Max(retryDelaySeconds, 1);
+
+    for (var attempt = 1; attempt <= attempts; attempt++)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      var result = await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIds, destinationFolderId, cancellationToken);
+      if (result.IsSuccess)
+      {
+        return result;
+      }
+
+      if (attempt >= attempts)
+      {
+        return result;
+      }
+
+      var delay = TimeSpan.FromSeconds(delaySeconds * attempt);
+      MoveProgressText = $"Riprovo lo spostamento batch tra {FormatDuration(delay)}...";
+      MoveDetailText = $"{MoveProgressText} Errore: {result.Fault?.Reason}";
+      StatusMessage = MoveDetailText;
+      await Task.Delay(delay, cancellationToken);
+    }
+
+    return await _moveDiagnosticService.MoveMessagesAsync(settings, password, messageIds, destinationFolderId, cancellationToken);
+  }
+
   private void ResetMoveProgress()
   {
     StopDownloadMetricsTimer();
@@ -2341,6 +2495,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationEtaText = string.Empty;
     OperationFolderText = string.Empty;
     OperationFileText = string.Empty;
+    _operationMetricsVisible = false;
   }
 
   private void StartDownloadMetricsTimer()

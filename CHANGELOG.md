@@ -2,6 +2,10 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.8] - 2026-08-04
+
+- Sostituita la conferma modale sulla cancellazione delle cartelle vuote con una finestra dedicata non bloccante, così la preview resta consultabile.
+
 ## [1.8.7] - 2026-08-04
 
 - Ripristinato il messaggio di stato operativo al posto dell'aggiornamento tecnico del log.

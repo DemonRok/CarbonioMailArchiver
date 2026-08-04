@@ -9,7 +9,6 @@ namespace CarbonioMailArchiver.Infrastructure.Services;
 
 public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownloadService> logger) : IMessageDownloadService
 {
-  private const int SearchPageSize = 100;
   private const int CopyBufferSize = 81920;
 
   public async Task<MailDownloadResult> DownloadFolderTreeAsync(
@@ -18,6 +17,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     MailFolder rootFolder,
     IReadOnlyList<MailFolder> foldersToDownload,
     string downloadRootDirectory,
+    int batchSize,
     int speedLimitKbps,
     int retryCount,
     int retryDelaySeconds,
@@ -38,6 +38,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     }
 
     var targetDirectory = Path.Combine(downloadRootDirectory, SanitizePathSegment(settings.Email));
+    var searchPageSize = Math.Clamp(batchSize, 10, 500);
     var folders = foldersToDownload
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
       .ToArray();
@@ -54,7 +55,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       {
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", 0, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-        var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
+        var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
         messagesByFolder[folder.Id] = messages;
         totalCount += messages.Count;
       }
@@ -142,6 +143,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     MailFolder rootFolder,
     IReadOnlyList<MailFolder> foldersToVerify,
     string downloadRootDirectory,
+    int batchSize,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken)
   {
@@ -159,6 +161,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     }
 
     var targetDirectory = Path.Combine(downloadRootDirectory, SanitizePathSegment(settings.Email));
+    var searchPageSize = Math.Clamp(batchSize, 10, 500);
     var folders = foldersToVerify
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase)
       .ToArray();
@@ -170,7 +173,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     {
       cancellationToken.ThrowIfCancellationRequested();
       progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
-      var messages = await SearchAllMessagesAsync(client, folder, cancellationToken);
+      var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
       messagesByFolder[folder.Id] = messages;
       totalCount += messages.Count;
     }
@@ -336,6 +339,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
   private static async Task<IReadOnlyList<MailMessageSummary>> SearchAllMessagesAsync(
     CarbonioWebClient client,
     MailFolder folder,
+    int searchPageSize,
     CancellationToken cancellationToken)
   {
     var messages = new List<MailMessageSummary>();
@@ -345,7 +349,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     while (true)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      using var response = await client.PostSearchAsync($"inid:{folder.Id}", SearchPageSize, offset, cancellationToken);
+      using var response = await client.PostSearchAsync($"inid:{folder.Id}", searchPageSize, offset, cancellationToken);
       var content = await response.Content.ReadAsStringAsync(cancellationToken);
       if (!response.IsSuccessStatusCode)
       {
@@ -361,12 +365,12 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
         }
       }
 
-      if (!page.HasMore || page.Messages.Count < SearchPageSize)
+      if (!page.HasMore || page.Messages.Count < searchPageSize)
       {
         return messages;
       }
 
-      offset += SearchPageSize;
+      offset += searchPageSize;
     }
   }
 
