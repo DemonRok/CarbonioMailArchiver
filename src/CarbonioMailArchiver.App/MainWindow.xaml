@@ -446,20 +446,16 @@
                         <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
                         <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
+                            <Button Content="Ripristina default"
+                                    Command="{Binding RestoreConfigurationDefaultsCommand}"
+                                    Width="140"
+                                    Margin="0,0,10,0" />
+                            <Button Content="Salva configurazione"
+                                    Command="{Binding SaveCommand}"
+                                    Width="140" />
+                        </StackPanel>
                     </StackPanel>
-                    <Grid Grid.Row="11" Grid.ColumnSpan="2" Margin="0,14,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button Content="Ripristina default"
-                                Command="{Binding RestoreConfigurationDefaultsCommand}"
-                                Margin="0,0,6,0" />
-                        <Button Grid.Column="1"
-                                Content="Salva configurazione"
-                                Command="{Binding SaveCommand}"
-                                Margin="6,0,0,0" />
-                    </Grid>
                 </Grid>
             </TabItem>
 

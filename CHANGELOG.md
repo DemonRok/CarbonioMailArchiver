@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.9.2] - 2026-08-20
+
+- Riposizionati i pulsanti di configurazione sotto l'elenco delle opzioni, evitando sovrapposizioni.
+- Mantenuta una larghezza compatta e uniforme per entrambi i pulsanti.
+
 ## [1.9.1] - 2026-08-20
 
 - Resi fluidi i pulsanti di configurazione, che ora seguono la larghezza della finestra.
