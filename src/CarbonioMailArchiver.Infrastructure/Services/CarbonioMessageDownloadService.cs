@@ -21,6 +21,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     int speedLimitKbps,
     int retryCount,
     int retryDelaySeconds,
+    DateOnly? beforeDate,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken)
   {
@@ -49,27 +50,41 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var skippedCount = 0;
     var downloadedThisSessionCount = 0;
     var completedCount = 0;
+    var countedMessageCount = 0;
 
     try
     {
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", 0, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
-        var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        var messages = await SearchAllMessagesAsync(
+          client,
+          folder,
+          searchPageSize,
+          beforeDate,
+          pageCount =>
+          {
+            countedMessageCount += pageCount;
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          },
+          cancellationToken);
         messagesByFolder[folder.Id] = messages;
         totalCount += messages.Count;
       }
+
+      // Il tempo di download deve escludere la scansione iniziale delle cartelle.
+      operationStopwatch.Restart();
 
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
         var folderDirectory = BuildLocalFolderDirectory(targetDirectory, folder.AbsolutePath, rootFolder.AbsolutePath);
-        Directory.CreateDirectory(folderDirectory);
 
         foreach (var message in messagesByFolder[folder.Id])
         {
           cancellationToken.ThrowIfCancellationRequested();
+          Directory.CreateDirectory(folderDirectory);
           var fileName = BuildMessageFileName(message);
           var filePath = Path.Combine(folderDirectory, fileName);
           if (File.Exists(filePath))
@@ -144,6 +159,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     IReadOnlyList<MailFolder> foldersToVerify,
     string downloadRootDirectory,
     int batchSize,
+    DateOnly? beforeDate,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken)
   {
@@ -167,6 +183,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       .ToArray();
     var messagesByFolder = new Dictionary<string, IReadOnlyList<MailMessageSummary>>(StringComparer.Ordinal);
     var totalCount = 0;
+    var countedMessageCount = 0;
     var operationStopwatch = Stopwatch.StartNew();
 
     if (folders.Length > 1)
@@ -180,8 +197,18 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           try
           {
             cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
-            var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+            var messages = await SearchAllMessagesAsync(
+              client,
+              folder,
+              searchPageSize,
+              beforeDate,
+              pageCount =>
+              {
+                var counted = Interlocked.Add(ref countedMessageCount, pageCount);
+                progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {counted} trovati", counted, 0, 0, 0, 0, operationStopwatch.Elapsed));
+              },
+              cancellationToken);
             return (FolderId: folder.Id, Messages: messages);
           }
           finally
@@ -207,8 +234,18 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", 0, totalCount, 0, 0, 0, operationStopwatch.Elapsed));
-        var messages = await SearchAllMessagesAsync(client, folder, searchPageSize, cancellationToken);
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+        var messages = await SearchAllMessagesAsync(
+          client,
+          folder,
+          searchPageSize,
+          beforeDate,
+          pageCount =>
+          {
+            countedMessageCount += pageCount;
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+          },
+          cancellationToken);
         messagesByFolder[folder.Id] = messages;
         totalCount += messages.Count;
       }
@@ -376,6 +413,8 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     CarbonioWebClient client,
     MailFolder folder,
     int searchPageSize,
+    DateOnly? beforeDate,
+    Action<int>? onPageCount,
     CancellationToken cancellationToken)
   {
     var messages = new List<MailMessageSummary>();
@@ -385,7 +424,13 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     while (true)
     {
       cancellationToken.ThrowIfCancellationRequested();
-      using var response = await client.PostSearchAsync($"inid:{folder.Id}", searchPageSize, offset, cancellationToken);
+      var query = $"inid:{folder.Id}";
+      if (beforeDate is not null)
+      {
+        query += $" before:{beforeDate.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
+      }
+
+      using var response = await client.PostSearchAsync(query, searchPageSize, offset, cancellationToken);
       var content = await response.Content.ReadAsStringAsync(cancellationToken);
       if (!response.IsSuccessStatusCode)
       {
@@ -393,12 +438,19 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       }
 
       var page = ParseSearchResult(content);
+      var addedCount = 0;
       foreach (var message in page.Messages)
       {
         if (!string.IsNullOrWhiteSpace(message.Id) && knownIds.Add(message.Id))
         {
           messages.Add(message);
+          addedCount++;
         }
+      }
+
+      if (addedCount > 0)
+      {
+        onPageCount?.Invoke(addedCount);
       }
 
       if (!page.HasMore || page.Messages.Count < searchPageSize)

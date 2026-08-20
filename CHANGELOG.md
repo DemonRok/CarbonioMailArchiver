@@ -2,6 +2,12 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.10.0] - 2026-08-20
+
+- Aggiunta la modalità di download dell'intera casella con ricostruzione ricorsiva dell'albero delle cartelle.
+- In modalità normale, download e verifica EML rispettano la data `Cerca prima del`.
+- Aggiunta l'opzione per ignorare la data durante il download completo della casella.
+
 ## [1.9.2] - 2026-08-20
 
 - Riposizionati i pulsanti di configurazione sotto l'elenco delle opzioni, evitando sovrapposizioni.

@@ -57,6 +57,7 @@ public interface IMessageDownloadService
     int speedLimitKbps,
     int retryCount,
     int retryDelaySeconds,
+    DateOnly? beforeDate,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken);
 
@@ -67,6 +68,7 @@ public interface IMessageDownloadService
     IReadOnlyList<MailFolder> foldersToVerify,
     string downloadRootDirectory,
     int batchSize,
+    DateOnly? beforeDate,
     IProgress<MailDownloadProgress>? progress,
     CancellationToken cancellationToken);
 }

@@ -53,6 +53,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _showSpecialFolders;
   private bool _useArchiveDestination;
   private bool _includeSourceSubfolders;
+  private bool _downloadEntireMailbox;
   private bool _promptReportExportAfterMove = true;
   private string _downloadRootDirectory = string.Empty;
   private int _downloadSpeedLimitKbps;
@@ -72,6 +73,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string _moveBatchText = string.Empty;
   private string _moveDetailText = "Nessuno spostamento in corso.";
   private string _operationMetricsText = string.Empty;
+  private string _operationSkippedText = string.Empty;
   private string _operationDownloadedText = string.Empty;
   private string _operationElapsedText = string.Empty;
   private string _operationSpeedText = string.Empty;
@@ -333,6 +335,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
+  public bool DownloadEntireMailbox
+  {
+    get => _downloadEntireMailbox;
+    set
+    {
+      if (EqualityComparer<bool>.Default.Equals(_downloadEntireMailbox, value))
+      {
+        return;
+      }
+
+      SetField(ref _downloadEntireMailbox, value);
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSearchBeforeDateEnabled)));
+      InvalidateDownloadVerification();
+    }
+  }
+
+  public bool IsSearchBeforeDateEnabled => !DownloadEntireMailbox;
+
   public FolderSelectionViewModel? SelectedSourceFolder
   {
     get => _selectedSourceFolder;
@@ -592,6 +612,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private set => SetField(ref _operationMetricsText, value);
   }
 
+  public string OperationSkippedText
+  {
+    get => _operationSkippedText;
+    private set => SetField(ref _operationSkippedText, value);
+  }
+
   public string OperationDownloadedText
   {
     get => _operationDownloadedText;
@@ -662,6 +688,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       ShowSpecialFolders = settings.ShowSpecialFolders;
       UseArchiveDestination = settings.UseArchiveDestination;
       IncludeSourceSubfolders = settings.IncludeSourceSubfolders;
+      DownloadEntireMailbox = settings.DownloadEntireMailbox;
       PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
       TimeoutSeconds = settings.TimeoutSeconds;
       PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
@@ -1217,6 +1244,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       await LoadFoldersAsync();
     }
 
+    DateOnly? beforeDate = null;
+    if (!DownloadEntireMailbox)
+    {
+      if (!TryParseSearchBeforeDate(out var parsedBeforeDate))
+      {
+        StatusMessage = "Data non valida. Usa il formato gg/MM/aaaa.";
+        return;
+      }
+
+      beforeDate = parsedBeforeDate;
+    }
+
     var rootFolder = ResolveDownloadRootFolder();
     if (rootFolder is null)
     {
@@ -1226,7 +1265,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    var foldersToDownload = GetFoldersUnder(rootFolder).ToArray();
+    var foldersToDownload = GetDownloadFolders(rootFolder).ToArray();
     if (foldersToDownload.Length == 0)
     {
       StatusMessage = $"Nessuna cartella da scaricare per {rootFolder.AbsolutePath}.";
@@ -1240,8 +1279,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       ? "senza limite di velocita'"
       : $"{DownloadSpeedLimitKbps.ToString(CultureInfo.InvariantCulture)} KB/s";
     PauseMetricsForConfirmation();
+    var confirmationScope = DownloadEntireMailbox
+      ? "tutta la casella, ricreando l'albero completo delle cartelle"
+      : $"la cartella {rootFolder.AbsolutePath} e le sue sottocartelle prima del {beforeDate:dd/MM/yyyy}";
     var confirmation = MessageBox.Show(
-      $"Scaricare in formato EML la cartella {rootFolder.AbsolutePath} e le sue sottocartelle?\n\nCartelle da scandire: {foldersToDownload.Length}\nDestinazione locale: {settings.DownloadRootDirectory}\\{settings.Email}\nVelocita': {speedText}",
+      $"Scaricare in formato EML {confirmationScope}?\n\nCartelle da scandire: {foldersToDownload.Length}\nDestinazione locale: {settings.DownloadRootDirectory}\\{settings.Email}\nVelocita': {speedText}",
       "Conferma download EML",
       MessageBoxButton.YesNo,
       MessageBoxImage.Question,
@@ -1263,12 +1305,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveProgressText = MoveDetailText;
     IsMoveProgressIndeterminate = true;
     OperationMetricsText = string.Empty;
-    OperationDownloadedText = "MB scaricati: conteggio in corso";
+    OperationSkippedText = string.Empty;
+    OperationDownloadedText = "Dati scaricati: 0 B.";
     OperationElapsedText = "Trascorso: 0s";
     OperationSpeedText = "Velocita': in calcolo";
     OperationEtaText = "ETA: in calcolo";
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
-    OperationFileText = "File: conteggio in corso";
+    OperationFileText = string.Empty;
     _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, 0, 0, TimeSpan.Zero);
     ResetDownloadProgressTimer();
     StartDownloadMetricsTimer();
@@ -1289,7 +1332,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         IsMoveProgressIndeterminate = true;
         MoveProgressPercentText = string.Empty;
         MoveProgressPercentage = 0;
-        MoveDetailText = "Conteggio messaggi in corso...";
+        MoveDetailText = $"Conteggio messaggi: {downloadProgress.CompletedCount} trovati...";
       }
       else
       {
@@ -1300,11 +1343,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       MoveBatchText = string.Empty;
+      OperationSkippedText = string.Empty;
       OperationFolderText = $"Cartella: {downloadProgress.CurrentFolder}";
-      OperationFileText = $"File: {downloadProgress.CurrentFile}";
+      OperationFileText = downloadProgress.TotalCount <= 0 ? string.Empty : $"File: {downloadProgress.CurrentFile}";
       UpdateDownloadMetricTexts(downloadProgress, GetMonotonicDownloadElapsed(downloadProgress.Elapsed), DateTimeOffset.Now);
       MoveProgressText = MoveDetailText;
-      StatusMessage = MoveDetailText;
+      StatusMessage = downloadProgress.TotalCount <= 0
+        ? "Conteggio messaggi in corso..."
+        : "Download EML in corso...";
     });
 
     try
@@ -1319,6 +1365,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         settings.DownloadSpeedLimitKbps,
         settings.DownloadRetryCount,
         settings.DownloadRetryDelaySeconds,
+        beforeDate,
         progress,
         downloadCancellation.Token);
 
@@ -1336,6 +1383,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveDetailText = $"{result.DownloadedCount} messaggi completati in {result.TargetDirectory}.";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
+      OperationSkippedText = string.Empty;
       OperationDownloadedText = string.Empty;
       OperationElapsedText = string.Empty;
       OperationSpeedText = string.Empty;
@@ -1364,6 +1412,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = $"Download EML non completato: {ex.Message}";
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
+      OperationSkippedText = string.Empty;
       OperationDownloadedText = string.Empty;
       OperationElapsedText = string.Empty;
       OperationSpeedText = string.Empty;
@@ -1400,6 +1449,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       await LoadFoldersAsync();
     }
 
+    DateOnly? beforeDate = null;
+    if (!DownloadEntireMailbox)
+    {
+      if (!TryParseSearchBeforeDate(out var parsedBeforeDate))
+      {
+        StatusMessage = "Data non valida. Usa il formato gg/MM/aaaa.";
+        return;
+      }
+
+      beforeDate = parsedBeforeDate;
+    }
+
     var rootFolder = ResolveDownloadRootFolder();
     if (rootFolder is null)
     {
@@ -1409,7 +1470,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    var foldersToVerify = GetFoldersUnder(rootFolder).ToArray();
+    var foldersToVerify = GetDownloadFolders(rootFolder).ToArray();
     if (foldersToVerify.Length == 0)
     {
       StatusMessage = $"Nessuna cartella da verificare per {rootFolder.AbsolutePath}.";
@@ -1429,6 +1490,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveProgressText = MoveDetailText;
     IsMoveProgressIndeterminate = true;
     OperationMetricsText = string.Empty;
+    OperationSkippedText = string.Empty;
     OperationDownloadedText = string.Empty;
     OperationElapsedText = string.Empty;
     OperationSpeedText = string.Empty;
@@ -1442,9 +1504,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var progress = new Progress<MailDownloadProgress>(verifyProgress =>
     {
       OperationFolderText = $"Cartella: {verifyProgress.CurrentFolder}";
-      OperationFileText = verifyProgress.CurrentFile;
+      OperationFileText = verifyProgress.TotalCount <= 0
+        ? $"Messaggi trovati: {verifyProgress.CompletedCount}"
+        : verifyProgress.CurrentFile;
       MoveDetailText = verifyProgress.TotalCount <= 0
-        ? "Verifica EML: conteggio messaggi in corso..."
+        ? $"Verifica EML: {verifyProgress.CompletedCount} messaggi trovati..."
         : $"Verifica EML: presenti {verifyProgress.CompletedCount}/{verifyProgress.TotalCount}.";
       MoveProgressText = MoveDetailText;
       UpdateOperationMetrics(verifyProgress.CompletedCount, verifyProgress.TotalCount, verifyProgress.CurrentFolder);
@@ -1460,6 +1524,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         foldersToVerify.Select(ToMailFolder).ToArray(),
         settings.DownloadRootDirectory,
         batchSize,
+        beforeDate,
         progress,
         verifyCancellation.Token);
 
@@ -1609,6 +1674,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveProgressText = MoveDetailText;
     IsMoveProgressIndeterminate = false;
     OperationMetricsText = string.Empty;
+    OperationSkippedText = string.Empty;
     OperationDownloadedText = $"File compressi: 0/{filesToCompress}";
     OperationElapsedText = "Trascorso: 0s";
     OperationSpeedText = "Velocita': in calcolo";
@@ -1833,6 +1899,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private FolderSelectionViewModel? ResolveDownloadRootFolder()
   {
+    if (DownloadEntireMailbox)
+    {
+      return AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase));
+    }
+
     if (UseArchiveDestination)
     {
       return AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/Archive", StringComparison.OrdinalIgnoreCase));
@@ -1846,6 +1917,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var rootPrefix = rootFolder.AbsolutePath.TrimEnd('/') + "/";
     return AvailableFolders
       .Where(folder => folder.Id == rootFolder.Id || folder.AbsolutePath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase);
+  }
+
+  private IEnumerable<FolderSelectionViewModel> GetDownloadFolders(FolderSelectionViewModel rootFolder)
+  {
+    if (!DownloadEntireMailbox)
+    {
+      return GetFoldersUnder(rootFolder);
+    }
+
+    return AvailableFolders
+      .Where(folder => !string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase))
       .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase);
   }
 
@@ -2313,6 +2396,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     ShowSpecialFolders = false;
     UseArchiveDestination = false;
     IncludeSourceSubfolders = false;
+    DownloadEntireMailbox = false;
     DiagnosticSoapLoggingEnabled = false;
     PromptReportExportAfterMove = true;
     DownloadRootDirectory = DefaultDownloadDirectory;
@@ -2415,6 +2499,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       LastDestinationFolderId = SelectedDestinationFolder?.Id ?? _lastDestinationFolderId,
       UseArchiveDestination = UseArchiveDestination,
       IncludeSourceSubfolders = IncludeSourceSubfolders,
+      DownloadEntireMailbox = DownloadEntireMailbox,
       RememberCredentials = RememberCredentials,
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
@@ -2741,6 +2826,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = string.Empty;
     MoveDetailText = MoveProgressText;
     OperationMetricsText = string.Empty;
+    OperationSkippedText = string.Empty;
     OperationDownloadedText = string.Empty;
     OperationElapsedText = string.Empty;
     OperationSpeedText = string.Empty;
@@ -2833,12 +2919,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       _lastDownloadEtaUpdate = now;
     }
 
-    var skippedText = progress.SkippedCount > 0
-      ? $" Gia' presenti saltati: {progress.SkippedCount.ToString(CultureInfo.InvariantCulture)}."
+    OperationSkippedText = progress.TotalCount > 0 && progress.SkippedCount > 0
+      ? $"Gia' presenti saltati: {progress.SkippedCount.ToString(CultureInfo.InvariantCulture)}."
       : string.Empty;
     OperationElapsedText = $"Trascorso: {FormatDuration(elapsed)}";
     OperationSpeedText = $"Velocita': {speedText}";
-    OperationDownloadedText = $"Dati scaricati: {FormatBytes(progress.BytesDownloaded)}. Completati: {progress.CompletedCount.ToString(CultureInfo.InvariantCulture)}/{Math.Max(progress.TotalCount, 0).ToString(CultureInfo.InvariantCulture)}.{skippedText}";
+    OperationDownloadedText = progress.TotalCount > 0
+      ? $"Dati scaricati: {FormatBytes(progress.BytesDownloaded)}."
+      : "Dati scaricati: 0 B.";
     OperationEtaText = _stableDownloadEtaText.StartsWith("ETA:", StringComparison.Ordinal)
       ? _stableDownloadEtaText
       : "ETA: in calcolo";

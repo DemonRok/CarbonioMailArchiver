@@ -95,7 +95,16 @@
                             <CheckBox Grid.Row="4" Grid.Column="1" Content="Ricorda password con DPAPI per l'utente Windows corrente" IsChecked="{Binding RememberCredentials}" Margin="0,0,0,10" />
 
                             <TextBlock Grid.Row="5" Text="Cerca prima del (gg/MM/aaaa)" VerticalAlignment="Center" Margin="0,0,12,12" />
-                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12" />
+                            <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
+                                <TextBox Text="{Binding SearchBeforeDate, UpdateSourceTrigger=PropertyChanged}"
+                                         Width="120"
+                                         HorizontalAlignment="Left"
+                                         IsEnabled="{Binding IsSearchBeforeDateEnabled}" />
+                                <CheckBox Content="Scarica tutta la casella ignorando la data"
+                                          IsChecked="{Binding DownloadEntireMailbox}"
+                                          VerticalAlignment="Center"
+                                          Margin="16,0,0,0" />
+                            </StackPanel>
 
                             <TextBlock Grid.Row="6" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
@@ -171,6 +180,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid Grid.ColumnSpan="2" Margin="0,0,0,3">
                             <TextBlock Text="{Binding OperationElapsedText}"
@@ -203,20 +213,23 @@
                                    Style="{StaticResource OperationTextBlockStyle}"
                                    Foreground="#555" />
                         <TextBlock Grid.Row="4"
+                                   Text="{Binding OperationSkippedText}"
+                                   Style="{StaticResource OperationTextBlockStyle}" />
+                        <TextBlock Grid.Row="5"
                                    Text="{Binding OperationFolderText}"
                                    TextTrimming="CharacterEllipsis"
                                    Style="{StaticResource OperationTextBlockStyle}" />
-                        <TextBlock Grid.Row="5"
+                        <TextBlock Grid.Row="6"
                                    Text="{Binding OperationFileText}"
                                    TextTrimming="CharacterEllipsis"
                                    Style="{StaticResource OperationTextBlockStyle}" />
-                        <TextBlock Grid.Row="6"
+                        <TextBlock Grid.Row="7"
                                    Text="{Binding OperationDownloadedText}"
                                    Style="{StaticResource OperationTextBlockStyle}" />
-                        <TextBlock Grid.Row="7"
+                        <TextBlock Grid.Row="8"
                                    Text="{Binding OperationEtaText}"
                                    Style="{StaticResource OperationTextBlockStyle}" />
-                        <TextBlock Grid.Row="8"
+                        <TextBlock Grid.Row="9"
                                    Text="{Binding OperationMetricsText}"
                                    Style="{StaticResource OperationTextBlockStyle}" />
                         <Button Grid.Row="3"
@@ -444,6 +457,7 @@
                         <TextBlock Text="• Retry download: tentativi per ogni singola email; il delay cresce moltiplicando il valore base per il numero del tentativo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Compressione 7z: livello usato per creare archivi 7z dai download EML; livelli piu' alti richiedono piu' tempo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Scarica tutta la casella: ignora la data e ricrea localmente l'albero completo delle cartelle durante Scarica EML." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
                         <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
