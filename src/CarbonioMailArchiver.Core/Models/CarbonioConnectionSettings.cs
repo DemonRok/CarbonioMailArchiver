@@ -7,6 +7,7 @@ public sealed class CarbonioConnectionSettings
   public string Email { get; set; } = string.Empty;
   public string LastSourceFolderId { get; set; } = string.Empty;
   public string LastDestinationFolderId { get; set; } = string.Empty;
+  public string LastDownloadFolderPath { get; set; } = string.Empty;
   public bool UseArchiveDestination { get; set; }
   public bool IncludeSourceSubfolders { get; set; }
   public bool DownloadEntireMailbox { get; set; }
@@ -17,7 +18,7 @@ public sealed class CarbonioConnectionSettings
   public bool ShowSpecialFolders { get; set; }
   public int TimeoutSeconds { get; set; } = 100;
   public int PreviewMessageLimit { get; set; } = 10;
-  public int BatchSize { get; set; } = 50;
+  public int BatchSize { get; set; } = 250;
   public int MaxMessagesToMove { get; set; }
   public string SearchBeforeDate { get; set; } = string.Empty;
   public bool PromptReportExportAfterMove { get; set; } = true;

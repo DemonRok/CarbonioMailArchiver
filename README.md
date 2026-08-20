@@ -1,45 +1,42 @@
 # Carbonio Mail Archiver
 
-Applicazione desktop Windows in C# e WPF per analizzare e spostare in massa email presenti in una casella Carbonio usando API HTTP/SOAP lato server, senza IMAP, POP3 o EAS.
+Applicazione desktop Windows per analizzare e spostare in massa email presenti in una casella Carbonio, senza usare IMAP, POP3 o EAS.
 
 Licenza: MIT. Autore: Mauro Bettinelli.
 
 ## Funzioni
 
-- login reale tramite `POST /zx/auth/v2/login`;
-- cookie di sessione `ZX_AUTH_TOKEN`/`ZM_AUTH_TOKEN` mantenuti solo in memoria;
-- test connessione con `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- test ricerca in sola lettura con `SearchRequest`, preview configurabile fino a 100 messaggi;
+- test di connessione e ricerca in sola lettura;
+- preview configurabile fino a 100 messaggi;
 - caricamento cartelle e selezione sorgente/destinazione in UI;
+- esclusione predefinita delle cartelle speciali, con opzione per visualizzarle;
 - destinazione automatica in Archivio, con creazione delle sottocartelle mancanti sotto `/Archive`;
 - elaborazione opzionale della sorgente e di tutte le sue sottocartelle, una alla volta, in modalita' Archivio;
 - spostamento manuale controllato nel Cestino di cartelle sorgente/destinazione solo se vuote;
 - caricamento automatico cartelle all'avvio, opzionale, quando la password e' disponibile tramite DPAPI;
-- conteggio effettivo dei messaggi con ricerca paginata;
+- conteggio effettivo dei messaggi prima dello spostamento;
 - spostamento reale della preview;
-- spostamento reale dei risultati selezionati a batch, con default di 50 messaggi per chiamata e limite configurabile fino a 100;
+- spostamento reale dei risultati selezionati a batch, con default di 250 messaggi per chiamata e limite configurabile fino a 500;
 - limite opzionale del numero di email da spostare (`0` = tutte);
 - progress bar, annullamento cooperativo e log operazione;
 - report CSV opzionale al termine dello spostamento, salvato nella cartella `Reports` accanto all'eseguibile;
 - download EML della destinazione selezionata o dell'Archivio, con ricostruzione dell'albero cartelle sotto la casella;
+- persistenza della cartella da scaricare selezionata: l'opzione Archivio mostra `/Archive` senza perdere la selezione manuale da ripristinare quando viene disattivata;
 - limite opzionale di velocita' download in KB/s (`0` = senza limite);
+- retry configurabili per i download falliti, con ritardo progressivo;
+- verifica dei file EML scaricati e compressione 7z disponibile dopo una verifica riuscita;
 - configurazione dedicata con reset default e descrizione chiara delle opzioni;
 - tab Info con versione, percorsi, licenza e link utili;
 
-## Compatibilita Carbonio
+## Avvio rapido
 
-Gli endpoint SOAP possono variare tra installazioni Carbonio e tra provider. L'applicazione permette la configurazione manuale dell'URL SOAP ed e' consigliato eseguire un test di connessione prima degli spostamenti operativi.
+1. Estrai il contenuto dello ZIP in una cartella locale.
+2. Avvia `CarbonioMailArchiver.App.exe`.
+3. Inserisci URL Carbonio, account e password nella scheda `Connessione`.
+4. Premi `Salva`, poi `Carica cartelle` se il caricamento automatico non e' attivo.
+5. Seleziona sorgente e destinazione, esegui un `Test ricerca` e controlla la preview.
 
-Chiamate SOAP/API verificate o in uso:
-
-- `POST /zx/auth/v2/login` con JSON `{ "auth_method": "password", "user": "...", "password": "..." }`, flusso usato dalla WebUI Carbonio;
-- `GetInfoRequest` JSON su `/service/soap/GetInfoRequest`;
-- `SearchRequest` diagnostica con query equivalente a `in:inbox before:dd/MM/yyyy`;
-- `SearchRequest` su cartella scelta con query equivalente a `inid:<folderId> before:dd/MM/yyyy`;
-- `MsgActionRequest` con azione `move` verso la cartella destinazione;
-- `GetFolderRequest` per leggere ID, permessi e struttura cartelle;
-- `CreateFolderRequest` per creare, solo in modalita' Archivio, i segmenti mancanti del percorso destinazione sotto `/Archive`;
-- download raw EML tramite endpoint home Carbonio/Zimbra con `fmt=raw`.
+Per operazioni importanti e' consigliato effettuare prima una prova con `Sposta preview`.
 
 ## Report operazione
 
@@ -52,16 +49,17 @@ Se l'opzione e' abilitata, al termine di uno spostamento l'app chiede se esporta
 - esito finale;
 - riga per ogni messaggio selezionato, con stato `Spostato`, `Errore` o `Non spostato`.
 
-La dimensione batch controlla quante email vengono inviate in una singola richiesta di spostamento. Il valore predefinito e' 50, il minimo configurabile e' 10 e il massimo configurabile e' 100. Il limite email e' separato: ad esempio, con limite 1001 e batch 50, l'app esegue 20 batch da 50 messaggi e un batch finale da 1 messaggio.
+La dimensione batch controlla quante email vengono inviate in una singola richiesta di spostamento. Il valore predefinito e' 250, il minimo configurabile e' 10 e il massimo configurabile e' 500. Il limite email e' separato: ad esempio, con limite 1001 e batch 250, l'app esegue 4 batch da 250 messaggi e un batch finale da 1 messaggio.
 
 ## Download EML
 
-Il pulsante `Scarica EML` nella schermata principale scarica tutti gli `.eml` della cartella scelta e delle sue sottocartelle.
+Il pulsante `Scarica EML` nella schermata principale scarica tutti gli `.eml` della cartella scelta e delle sue sottocartelle. In modalita' normale rispetta il campo `Cerca prima del`; con `Scarica tutta la casella ignorando la data` parte dalla radice `/` e ricrea l'intero albero delle cartelle.
 
 - Se Archivio e' attivo, la radice del download e' `/Archive`.
 - Se Archivio non e' attivo, la radice del download e' la cartella di destinazione selezionata.
 - La cartella locale di base e' configurabile; sotto questa viene creata una directory con il nome della casella e poi il contenuto della radice scaricata, ad esempio `Downloads\utente@example.test\Inbox\APC` per `/Archive/Inbox/APC`.
 - Il limite velocita' e' espresso in KB/s; `0` significa nessun limite applicato dall'app.
+- I file gia' presenti vengono saltati per consentire il resume; la verifica EML confronta i messaggi attesi con i file locali prima di abilitare la compressione.
 
 ## Modalita Archivio
 
@@ -79,41 +77,6 @@ Se l'opzione "Includi sottocartelle" e' attiva, l'app processa la cartella sorge
 ## Cestino cartelle vuote
 
 I pulsanti "Cestina vuote" su sorgente e destinazione ricaricano lo stato dal server prima di spostare cartelle nel Cestino. Se "Includi sottocartelle" non e' attivo, viene valutata solo la cartella selezionata. Se "Includi sottocartelle" e' attivo, l'app valuta il ramo selezionato in modo ricorsivo e sposta nel Cestino dal livello piu' profondo verso l'alto. L'app non sposta cartelle di sistema, cartelle non modificabili, cartelle con messaggi o rami che contengono cartelle non vuote.
-
-## Build
-
-```bat
-dotnet build CarbonioMailArchiver.slnx
-```
-
-## Versione
-
-La versione corrente e' centralizzata in `Directory.Build.props`, proprieta' `BuildVersion`.
-La stessa versione viene applicata agli assembly e mostrata nel titolo della finestra.
-
-## Test
-
-```bat
-dotnet test CarbonioMailArchiver.slnx
-```
-
-## Pubblicazione locale
-
-```bat
-dotnet publish src\CarbonioMailArchiver.App\CarbonioMailArchiver.App.csproj -c Release -r win-x64 --self-contained false -o publish\win-x64
-```
-
-La build Release non genera PDB. L'eseguibile pubblicato si trova in `publish\win-x64\CarbonioMailArchiver.App.exe`.
-
-## Changelog
-
-Le modifiche principali sono tracciate in `CHANGELOG.md`, con le versioni piu' recenti elencate in ordine cronologico.
-
-## Release GitHub
-
-Il workflow `.github/workflows/release.yml` compila, esegue i test, pubblica la versione Release win-x64 self-contained senza PDB e genera uno ZIP.
-
-Quando viene creato un tag `v*`, il workflow crea una release GitHub pubblica con lo ZIP allegato.
 
 ## Sicurezza
 

@@ -2,6 +2,13 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.10.4] - 2026-08-20
+
+- Salvato anche il percorso della cartella da scaricare per ripristinare correttamente la selezione dopo il riavvio.
+- L'opzione Archivio continua a mostrare `/Archive` senza modificare la cartella personalizzata memorizzata.
+- Ripristinata correttamente la cartella di download anche quando coincide con la sorgente, ad esempio `/`.
+- La barra del download raggiunge il 100% solo dopo la verifica finale dei file.
+
 ## [1.10.3] - 2026-08-20
 
 - Preservata la cartella da scaricare selezionata manualmente quando e' attiva l'opzione Archivio.

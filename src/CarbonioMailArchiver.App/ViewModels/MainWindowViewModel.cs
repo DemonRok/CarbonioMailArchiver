@@ -43,6 +43,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private string? _lastReportPath;
   private string _lastSourceFolderId = string.Empty;
   private string _lastDestinationFolderId = string.Empty;
+  private string _lastDownloadFolderPath = string.Empty;
   private string _searchBeforeDate = DateTime.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
   private string _statusMessage = "Pronto. Configura l'endpoint Carbonio e salva la configurazione locale.";
   private FolderSelectionViewModel? _selectedSourceFolder;
@@ -402,9 +403,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       if (value is not null && !_restoringFolderSelections)
       {
         _lastDestinationFolderId = value.Id;
+        _lastDownloadFolderPath = value.AbsolutePath;
       }
 
-      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DestinationFolderDisplayText)));
       InvalidateDownloadVerification();
     }
   }
@@ -422,16 +423,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       _useArchiveDestination = value;
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(UseArchiveDestination)));
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDestinationFolderSelectionEnabled)));
-      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DestinationFolderDisplayText)));
       InvalidateDownloadVerification();
     }
   }
 
   public bool IsDestinationFolderSelectionEnabled => !UseArchiveDestination;
-
-  public string DestinationFolderDisplayText => UseArchiveDestination
-    ? "/Archive"
-    : SelectedDestinationFolder?.DisplayName ?? string.Empty;
 
   public bool IncludeSourceSubfolders
   {
@@ -697,6 +693,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       Email = settings.Email;
       _lastSourceFolderId = settings.LastSourceFolderId;
       _lastDestinationFolderId = settings.LastDestinationFolderId;
+      _lastDownloadFolderPath = settings.LastDownloadFolderPath;
       RememberCredentials = settings.RememberCredentials;
       DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
       AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
@@ -751,8 +748,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     _logger.LogInformation("Configurazione locale salvata per {Account}.", settings.Email);
     var sourceFolderLabel = SelectedSourceFolder?.AbsolutePath ?? settings.LastSourceFolderId;
     var destinationFolderLabel = settings.UseArchiveDestination
-      ? "Archivio automatico"
-      : SelectedDestinationFolder?.AbsolutePath ?? settings.LastDestinationFolderId;
+      ? $"Archivio automatico (selezione salvata: {settings.LastDownloadFolderPath})"
+      : settings.LastDownloadFolderPath;
     StatusMessage = $"Configurazione salvata. Cartelle: sorgente {sourceFolderLabel}, destinazione {destinationFolderLabel}. Le password non sono scritte nel JSON.";
     await RefreshLogsAsync();
   }
@@ -788,7 +785,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
-    await SaveSettingsSnapshotAsync();
     var password = await GetPasswordAsync(settings);
     StatusMessage = "Caricamento cartelle in corso...";
     MoveProgressPercentage = 0;
@@ -826,7 +822,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         : AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
           ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
           ?? AvailableFolders.FirstOrDefault();
-      SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId && folder.Id != SelectedSourceFolder?.Id)
+      // La cartella di download puo' coincidere con la sorgente (ad esempio / quando si scarica tutta la casella).
+      // Il controllo sorgente/destinazione resta valido per lo spostamento, non per il ripristino del download.
+      SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, _lastDownloadFolderPath, StringComparison.OrdinalIgnoreCase))
+        ?? AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId)
         ?? AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id)
         ?? SelectedSourceFolder;
     }
@@ -840,8 +839,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     MoveBatchText = StatusMessage;
     MoveDetailText = "Elenco cartelle aggiornato.";
     MoveProgressText = MoveDetailText;
-    await SaveSettingsSnapshotAsync();
-
     await RefreshLogsAsync();
   }
 
@@ -1363,9 +1360,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       else
       {
         IsMoveProgressIndeterminate = false;
-        MoveProgressPercentage = Math.Clamp((int)Math.Round(downloadProgress.CompletedCount * 100d / downloadProgress.TotalCount), 0, 100);
+        var completedAllMessages = downloadProgress.CompletedCount >= downloadProgress.TotalCount;
+        var downloadPercentage = Math.Clamp((int)Math.Round(downloadProgress.CompletedCount * 100d / downloadProgress.TotalCount), 0, 100);
+        // Il 100% viene mostrato solo dopo la verifica finale e l'esito positivo dell'operazione.
+        MoveProgressPercentage = completedAllMessages ? 99 : downloadPercentage;
         MoveProgressPercentText = $"{MoveProgressPercentage}%";
-        MoveDetailText = $"Messaggi completati: {downloadProgress.CompletedCount}/{downloadProgress.TotalCount}";
+        MoveDetailText = completedAllMessages
+          ? "Download terminato. Verifica finale dei file in corso..."
+          : $"Messaggi completati: {downloadProgress.CompletedCount}/{downloadProgress.TotalCount}";
       }
 
       MoveBatchText = string.Empty;
@@ -2525,7 +2527,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       SoapUrl = SoapUrl.Trim(),
       Email = Email.Trim(),
       LastSourceFolderId = SelectedSourceFolder?.Id ?? _lastSourceFolderId,
-      LastDestinationFolderId = SelectedDestinationFolder?.Id ?? _lastDestinationFolderId,
+      LastDestinationFolderId = !UseArchiveDestination && SelectedDestinationFolder is not null
+        ? SelectedDestinationFolder.Id
+        : _lastDestinationFolderId,
+      LastDownloadFolderPath = !UseArchiveDestination && SelectedDestinationFolder is not null
+        ? SelectedDestinationFolder.AbsolutePath
+        : _lastDownloadFolderPath,
       UseArchiveDestination = UseArchiveDestination,
       IncludeSourceSubfolders = IncludeSourceSubfolders,
       DownloadEntireMailbox = DownloadEntireMailbox,

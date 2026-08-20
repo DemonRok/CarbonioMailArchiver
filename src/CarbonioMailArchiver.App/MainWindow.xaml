@@ -133,14 +133,26 @@
                             <ComboBox Grid.Row="8" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
                                       SelectedItem="{Binding SelectedDestinationFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      DisplayMemberPath="DisplayName"
-                                      IsEditable="True"
-                                      IsReadOnly="True"
-                                      Text="{Binding DestinationFolderDisplayText, Mode=OneWay}"
                                       IsEnabled="{Binding IsDestinationFolderSelectionEnabled}"
                                       MinWidth="340"
                                       HorizontalAlignment="Left"
-                                      Margin="0,0,0,12" />
+                                      Margin="0,0,0,12">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.UseArchiveDestination, RelativeSource={RelativeSource AncestorType={x:Type ComboBox}}}" Value="True">
+                                                            <Setter Property="Text" Value="/Archive" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <Button Grid.Row="8"
                                     Grid.Column="1"
                                     Content="Cestina vuote"
@@ -447,19 +459,16 @@
                               Content="Chiedi se esportare il report CSV al termine dello spostamento"
                               IsChecked="{Binding PromptReportExportAfterMove}"
                               Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Margin="0,8,0,0">
                         <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
-                        <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta di spostamento." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Timeout SOAP: tempo massimo di attesa per ogni richiesta al server." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle; valore da 1 a 100." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta; valore da 10 a 500, predefinito 250." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Da spostare: limite totale di email da muovere; 0 significa tutte quelle trovate." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Cartella download EML: directory locale in cui creare la cartella della casella e l'albero delle cartelle scaricate." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Velocita' download: limite in KB/s per non saturare la connessione; 0 lascia il download senza throttling." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Retry download: tentativi per ogni singola email; il delay cresce moltiplicando il valore base per il numero del tentativo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Compressione 7z: livello usato per creare archivi 7z dai download EML; livelli piu' alti richiedono piu' tempo." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Carica cartelle all'avvio: usa la password salvata con DPAPI, se disponibile." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Scarica tutta la casella: ignora la data e ricrea localmente l'albero completo delle cartelle durante Scarica EML." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
-                        <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Text="• Cartella download EML: directory locale per i file scaricati." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Velocita' download: limite in KB/s; 0 lascia il download senza limite." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Retry download: tentativi e ritardo progressivo per i download falliti." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="• Compressione 7z: livello usato per gli archivi creati dai download EML." Foreground="#555" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
                             <Button Content="Ripristina default"
                                     Command="{Binding RestoreConfigurationDefaultsCommand}"
@@ -560,46 +569,47 @@
             </TabItem>
 
             <TabItem Header="Info" IsEnabled="{Binding IsOperationIdle}">
-                <Grid Margin="0,18,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="150" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,34">
+                <ScrollViewer Margin="0,12,0,0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                    <StackPanel Grid.ColumnSpan="2" Margin="0,0,0,18">
                         <TextBlock Text="Carbonio Mail Archiver" FontSize="18" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding AppVersion, StringFormat=Versione {0}}" FontSize="14" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding AppDescription}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding AppDescription}" FontSize="13" FontWeight="SemiBold" />
                     </StackPanel>
 
-                    <TextBlock Grid.Row="1" Text="Licenza" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LicenseName}" VerticalAlignment="Center" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="2" Text="Copyright" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CopyrightText}" VerticalAlignment="Center" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="3" Text="Configurazione" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ConfigurationPath}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="4" Text="AppData" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ApplicationDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="5" Text="Log" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LogDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="6" Text="Report" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,16" />
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ReportDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,16" />
-                    <TextBlock Grid.Row="7" Text="Eseguibile" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,22" />
-                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ExecutableDirectory}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22" />
+                    <TextBlock Grid.Row="1" Text="Licenza" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LicenseName}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="2" Text="Copyright" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CopyrightText}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="3" Text="Configurazione" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ConfigurationPath}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ConfigurationPath}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="4" Text="AppData" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ApplicationDirectory}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ApplicationDirectory}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="5" Text="Log" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LogDirectory}" TextTrimming="CharacterEllipsis" ToolTip="{Binding LogDirectory}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="6" Text="Report" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,8" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ReportDirectory}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ReportDirectory}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Grid.Row="7" Text="Eseguibile" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,14" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ExecutableDirectory}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ExecutableDirectory}" VerticalAlignment="Center" Margin="0,0,0,14" />
 
-                    <WrapPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,0,0,16">
+                    <WrapPanel Grid.Row="8" Grid.ColumnSpan="2" Margin="0,0,0,8">
                         <Button Content="Apri AppData" Command="{Binding OpenAppDataCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Apri Log" Command="{Binding OpenLogsCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Apri Download" Command="{Binding OpenDownloadsCommand}" Width="178" Margin="0,0,10,8" />
@@ -610,8 +620,8 @@
                         <Button Content="Apri Release" Command="{Binding OpenReleasesCommand}" Width="178" Margin="0,0,10,8" />
                         <Button Content="Apri Licenza" Command="{Binding OpenLicenseCommand}" Width="178" Margin="0,0,10,8" />
                     </WrapPanel>
-
-                </Grid>
+                    </Grid>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 
