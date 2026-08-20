@@ -1120,9 +1120,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         "Completato",
         CancellationToken.None);
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
-      await LoadFoldersAsync();
-      await RefreshLogsAsync();
       ShowMoveCompletedMessage(movedCount, DateTimeOffset.Now - operationStartedAt);
+      await ReloadFoldersAfterOperationAsync("spostamento batch");
+      await RefreshLogsAsync();
       StopOperationMetricsTimer();
     }
     catch (OperationCanceledException)
@@ -2154,7 +2154,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         result.IsSuccess,
         result.Message);
       StatusMessage = result.Message;
-      await LoadFoldersAsync();
+      await ReloadFoldersAfterOperationAsync("spostamento cartelle vuote nel cestino");
       await RefreshLogsAsync();
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
@@ -2189,6 +2189,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     });
 
     return tcs.Task;
+  }
+
+  private async Task ReloadFoldersAfterOperationAsync(string operationName)
+  {
+    try
+    {
+      await LoadFoldersAsync();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+    {
+      _logger.LogWarning(ex, "Ricarica cartelle fallita dopo {Operation}.", operationName);
+      StatusMessage = $"Operazione completata, ma il caricamento cartelle non e' riuscito: {ex.Message}";
+    }
   }
 
   private void PauseMetricsForConfirmation()

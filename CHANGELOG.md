@@ -2,12 +2,14 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
-## [1.8.24] - 2026-08-20
+## [1.8.26] - 2026-08-20
 
+- Dopo lo spostamento, il ricaricamento cartelle avviene solo a fine operazione.
+- Dopo lo spostamento, il ricaricamento cartelle non blocca più l'esito dell'operazione.
 - Dopo lo spostamento, le cartelle vengono ricaricate automaticamente.
 - Nel download EML l'indicazione dei dati scaricati non resta vincolata a MB e scala correttamente fino a GB.
 
-## [1.8.23] - 2026-08-20
+## [1.8.25] - 2026-08-20
 
 - Sostituita la conferma modale sulla cancellazione delle cartelle vuote con una finestra dedicata non bloccante, così la preview resta consultabile.
 
