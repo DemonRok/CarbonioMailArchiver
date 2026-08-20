@@ -421,15 +421,20 @@
                               Margin="0,0,0,10" />
                     <CheckBox Grid.Row="7"
                               Grid.Column="1"
+                              Content="Mostra anche cartelle speciali (Calendar, Drafts, Junk, Trash, Chats, Emailed Contacts)"
+                              IsChecked="{Binding ShowSpecialFolders}"
+                              Margin="0,0,0,10" />
+                    <CheckBox Grid.Row="8"
+                              Grid.Column="1"
                               Content="Logging diagnostico API/SOAP (senza password)"
                               IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
                               Margin="0,0,0,10" />
-                    <CheckBox Grid.Row="8"
+                    <CheckBox Grid.Row="9"
                               Grid.Column="1"
                               Content="Chiedi se esportare il report CSV al termine dello spostamento"
                               IsChecked="{Binding PromptReportExportAfterMove}"
                               Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Margin="0,12,0,0">
                         <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Batch move: quante email vengono inviate al server per ogni richiesta di spostamento." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -442,10 +447,19 @@
                         <TextBlock Text="• Logging diagnostico: registra dettagli tecnici API/SOAP senza salvare password." Foreground="#555" TextWrapping="Wrap" />
                         <TextBlock Text="• Report CSV: se abilitato, al termine dello spostamento chiede se esportare una ricevuta tecnica dell'operazione." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                     </StackPanel>
-                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,14,0,0">
-                        <Button Content="Ripristina default" Command="{Binding RestoreConfigurationDefaultsCommand}" Width="140" Margin="0,0,10,0" />
-                        <Button Content="Salva configurazione" Command="{Binding SaveCommand}" Width="140" />
-                    </StackPanel>
+                    <Grid Grid.Row="11" Grid.ColumnSpan="2" Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Content="Ripristina default"
+                                Command="{Binding RestoreConfigurationDefaultsCommand}"
+                                Margin="0,0,6,0" />
+                        <Button Grid.Column="1"
+                                Content="Salva configurazione"
+                                Command="{Binding SaveCommand}"
+                                Margin="6,0,0,0" />
+                    </Grid>
                 </Grid>
             </TabItem>
 

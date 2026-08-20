@@ -13,6 +13,7 @@ public sealed class CarbonioConnectionSettings
   public bool AcceptUntrustedCertificates { get; set; }
   public bool DiagnosticSoapLoggingEnabled { get; set; }
   public bool AutoLoadFoldersOnStartup { get; set; }
+  public bool ShowSpecialFolders { get; set; }
   public int TimeoutSeconds { get; set; } = 100;
   public int PreviewMessageLimit { get; set; } = 10;
   public int BatchSize { get; set; } = 50;

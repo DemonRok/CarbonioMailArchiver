@@ -50,6 +50,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
   private bool _autoLoadFoldersOnStartup;
+  private bool _showSpecialFolders;
   private bool _useArchiveDestination;
   private bool _includeSourceSubfolders;
   private bool _promptReportExportAfterMove = true;
@@ -96,6 +97,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private DispatcherTimer? _operationMetricsTimer;
   private bool _downloadMetricsTimerWasRunningBeforeConfirmation;
   private bool _operationMetricsTimerWasRunningBeforeConfirmation;
+  private bool _suppressSpecialFolderReload;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
@@ -420,6 +422,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _autoLoadFoldersOnStartup, value);
   }
 
+  public bool ShowSpecialFolders
+  {
+    get => _showSpecialFolders;
+    set
+    {
+      if (EqualityComparer<bool>.Default.Equals(_showSpecialFolders, value))
+      {
+        return;
+      }
+
+      SetField(ref _showSpecialFolders, value);
+      if (!_suppressSpecialFolderReload)
+      {
+        _ = LoadFoldersAsync();
+      }
+    }
+  }
+
   public bool PromptReportExportAfterMove
   {
     get => _promptReportExportAfterMove;
@@ -627,39 +647,48 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
   private async Task LoadAsync()
   {
-    var settings = await _configuration.LoadConnectionSettingsAsync(CancellationToken.None);
-    BaseUrl = settings.BaseUrl;
-    SoapUrl = settings.SoapUrl;
-    Email = settings.Email;
-    _lastSourceFolderId = settings.LastSourceFolderId;
-    _lastDestinationFolderId = settings.LastDestinationFolderId;
-    RememberCredentials = settings.RememberCredentials;
-    DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
-    AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
-    UseArchiveDestination = settings.UseArchiveDestination;
-    IncludeSourceSubfolders = settings.IncludeSourceSubfolders;
-    PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
-    TimeoutSeconds = settings.TimeoutSeconds;
-    PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
-    BatchSize = Math.Clamp(settings.BatchSize, 10, 500);
-    MaxMessagesToMove = Math.Max(settings.MaxMessagesToMove, 0);
-    DownloadRootDirectory = string.IsNullOrWhiteSpace(settings.DownloadRootDirectory)
-      ? DefaultDownloadDirectory
-      : settings.DownloadRootDirectory;
-    DownloadSpeedLimitKbps = Math.Clamp(settings.DownloadSpeedLimitKbps, 0, 10240);
-    DownloadRetryCount = Math.Clamp(settings.DownloadRetryCount, 1, 10);
-    DownloadRetryDelaySeconds = Math.Clamp(settings.DownloadRetryDelaySeconds, 1, 300);
-    SelectedSevenZipCompressionLevel = SevenZipCompressionLevels.FirstOrDefault(option => option.Level == Math.Clamp(settings.SevenZipCompressionLevel, 0, 9))
-      ?? SevenZipCompressionLevelOption.Default;
-    if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
+    _suppressSpecialFolderReload = true;
+    try
     {
-      SearchBeforeDate = savedSearchBeforeDate;
-    }
+      var settings = await _configuration.LoadConnectionSettingsAsync(CancellationToken.None);
+      BaseUrl = settings.BaseUrl;
+      SoapUrl = settings.SoapUrl;
+      Email = settings.Email;
+      _lastSourceFolderId = settings.LastSourceFolderId;
+      _lastDestinationFolderId = settings.LastDestinationFolderId;
+      RememberCredentials = settings.RememberCredentials;
+      DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
+      AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
+      ShowSpecialFolders = settings.ShowSpecialFolders;
+      UseArchiveDestination = settings.UseArchiveDestination;
+      IncludeSourceSubfolders = settings.IncludeSourceSubfolders;
+      PromptReportExportAfterMove = settings.PromptReportExportAfterMove;
+      TimeoutSeconds = settings.TimeoutSeconds;
+      PreviewMessageLimit = Math.Clamp(settings.PreviewMessageLimit, 1, 100);
+      BatchSize = Math.Clamp(settings.BatchSize, 10, 500);
+      MaxMessagesToMove = Math.Max(settings.MaxMessagesToMove, 0);
+      DownloadRootDirectory = string.IsNullOrWhiteSpace(settings.DownloadRootDirectory)
+        ? DefaultDownloadDirectory
+        : settings.DownloadRootDirectory;
+      DownloadSpeedLimitKbps = Math.Clamp(settings.DownloadSpeedLimitKbps, 0, 10240);
+      DownloadRetryCount = Math.Clamp(settings.DownloadRetryCount, 1, 10);
+      DownloadRetryDelaySeconds = Math.Clamp(settings.DownloadRetryDelaySeconds, 1, 300);
+      SelectedSevenZipCompressionLevel = SevenZipCompressionLevels.FirstOrDefault(option => option.Level == Math.Clamp(settings.SevenZipCompressionLevel, 0, 9))
+        ?? SevenZipCompressionLevelOption.Default;
+      if (TryNormalizeSavedSearchBeforeDate(settings.SearchBeforeDate, out var savedSearchBeforeDate))
+      {
+        SearchBeforeDate = savedSearchBeforeDate;
+      }
 
-    Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
-    StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
-      ? "Configurazione caricata. Password protetta caricata da DPAPI."
-      : "Configurazione caricata.";
+      Password = settings.RememberCredentials ? await _credentialStore.ReadPasswordAsync(settings.Email, CancellationToken.None) ?? string.Empty : string.Empty;
+      StatusMessage = settings.RememberCredentials && !string.IsNullOrEmpty(Password)
+        ? "Configurazione caricata. Password protetta caricata da DPAPI."
+        : "Configurazione caricata.";
+    }
+    finally
+    {
+      _suppressSpecialFolderReload = false;
+    }
   }
 
   private async Task SaveAsync()
@@ -739,7 +768,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     AvailableFolders.Clear();
 
-    foreach (var folder in foldersById.Values.OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase))
+    foreach (var folder in foldersById.Values
+      .Where(ShouldIncludeFolder)
+      .OrderBy(folder => folder.AbsolutePath, StringComparer.CurrentCultureIgnoreCase))
     {
       AvailableFolders.Add(new FolderSelectionViewModel(folder));
     }
@@ -2279,6 +2310,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     BatchSize = 250;
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
+    ShowSpecialFolders = false;
     UseArchiveDestination = false;
     IncludeSourceSubfolders = false;
     DiagnosticSoapLoggingEnabled = false;
@@ -2387,6 +2419,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
       AutoLoadFoldersOnStartup = AutoLoadFoldersOnStartup,
+      ShowSpecialFolders = ShowSpecialFolders,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600),
       PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100),
       BatchSize = Math.Clamp(BatchSize, 10, 500),
@@ -2453,6 +2486,42 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       CultureInfo.InvariantCulture,
       DateTimeStyles.None,
       out beforeDate);
+  }
+
+  private bool ShouldIncludeFolder(MailFolder folder)
+  {
+    return ShowSpecialFolders || !IsSpecialFolderPath(folder.AbsolutePath);
+  }
+
+  private static bool IsSpecialFolderPath(string folderPath)
+  {
+    if (string.IsNullOrWhiteSpace(folderPath))
+    {
+      return false;
+    }
+
+    var normalized = folderPath.Trim().Replace('\\', '/');
+    if (!normalized.StartsWith('/'))
+    {
+      normalized = "/" + normalized.TrimStart('/');
+    }
+
+    var specialRoots = new[]
+    {
+      "/Calendar",
+      "/Contacts",
+      "/Drafts",
+      "/Junk",
+      "/Trash",
+      "/Chats",
+      "/Emailed Contacts"
+    };
+
+    return specialRoots.Any(root =>
+      (string.Equals(root, "/Calendar", StringComparison.OrdinalIgnoreCase)
+        && normalized.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+      || string.Equals(normalized, root, StringComparison.OrdinalIgnoreCase)
+      || normalized.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase));
   }
 
   private static bool TryNormalizeSavedSearchBeforeDate(string value, out string normalized)

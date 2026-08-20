@@ -2,6 +2,15 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.9.1] - 2026-08-20
+
+- Resi fluidi i pulsanti di configurazione, che ora seguono la larghezza della finestra.
+
+## [1.9.0] - 2026-08-20
+
+- Aggiunta l'opzione per nascondere di default le cartelle speciali Carbonio durante il caricamento cartelle.
+- L'opzione puo' essere disattivata in configurazione per visualizzare anche Calendar, Junk, Drafts, Trash, Chats ed Emailed Contacts.
+
 ## [1.8.26] - 2026-08-20
 
 - Dopo lo spostamento, il ricaricamento cartelle avviene solo a fine operazione.
