@@ -31,7 +31,8 @@ public interface IFolderDiagnosticService
 
 public interface IArchiveFolderService
 {
-  Task<ArchiveFolderEnsureResult> EnsureArchiveDestinationAsync(CarbonioConnectionSettings settings, string password, MailFolder sourceFolder, CancellationToken cancellationToken);
+  Task<FolderTreeEnsureResult> EnsureArchiveDestinationAsync(CarbonioConnectionSettings settings, string password, MailFolder sourceFolder, CancellationToken cancellationToken);
+  Task<FolderTreeEnsureResult> EnsureTrashDestinationAsync(CarbonioConnectionSettings settings, string password, MailFolder sourceFolder, CancellationToken cancellationToken);
 }
 
 public interface IFolderMaintenanceService

@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="{Binding WindowTitle}" Height="866" MinHeight="580" Width="1118" MinWidth="780">
+        Title="{Binding WindowTitle}" Height="960" MinHeight="680" Width="1118" MinWidth="780">
     <Window.Resources>
         <Style TargetType="{x:Type Button}">
             <Setter Property="Height" Value="26" />
@@ -57,7 +57,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="360" IsEnabled="{Binding IsOperationIdle}">
+                    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="500" IsEnabled="{Binding IsOperationIdle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
@@ -162,18 +162,25 @@
                                     HorizontalAlignment="Left"
                                     Margin="350,0,0,12" />
 
-                            <WrapPanel Grid.Row="9" Grid.Column="1" VerticalAlignment="Top" Margin="0,8,0,4">
-                                <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" IsEnabled="{Binding CanCompressMessages}" Width="140" Margin="0,0,8,8" />
-                                <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
-                            </WrapPanel>
+                            <StackPanel Grid.Row="9" Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,4">
+                                <TextBlock Text="Spostamento server" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                                <WrapPanel HorizontalAlignment="Center">
+                                    <Button Content="Test connessione" Command="{Binding TestConnectionCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Carica cartelle" Command="{Binding LoadFoldersCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Test ricerca" Command="{Binding TestSearchCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Simula spostamento" Command="{Binding SimulateMoveCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Sposta preview" Command="{Binding MovePreviewCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Sposta tutti" Command="{Binding MoveAllSearchResultsCommand}" Width="140" Margin="0,0,8,8" />
+                                </WrapPanel>
+                                <TextBlock Text="Download EML" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                                <WrapPanel HorizontalAlignment="Center">
+                                    <Button Content="Scarica EML" Command="{Binding DownloadMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Verifica EML" Command="{Binding VerifyDownloadedMessagesCommand}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Sposta nel Cestino" Command="{Binding TrashDownloadedMessagesCommand}" IsEnabled="{Binding CanTrashDownloadedMessages}" Width="160" Margin="0,0,8,8" />
+                                    <Button Content="Comprimi EML" Command="{Binding CompressMessagesCommand}" IsEnabled="{Binding CanCompressMessages}" Width="140" Margin="0,0,8,8" />
+                                    <Button Content="Salva" Command="{Binding SaveCommand}" Width="140" Margin="0,0,8,8" />
+                                </WrapPanel>
+                            </StackPanel>
                         </Grid>
                     </ScrollViewer>
 

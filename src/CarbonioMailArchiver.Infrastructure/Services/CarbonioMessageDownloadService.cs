@@ -264,7 +264,27 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       verification.ExpectedCount,
       verification.MissingCount);
     progress?.Report(new MailDownloadProgress(rootFolder.AbsolutePath, "Verifica completata.", verification.PresentCount, verification.ExpectedCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
-    return new MailDownloadResult(verification.MissingCount == 0, message, verification.PresentCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
+    var folderPathsById = folders.ToDictionary(folder => folder.Id, folder => folder.AbsolutePath, StringComparer.Ordinal);
+    var messageTargets = messagesByFolder
+      .SelectMany(pair => pair.Value.Select(messageSummary => new DownloadedMessageTarget(
+        messageSummary.Id,
+        folderPathsById.TryGetValue(pair.Key, out var folderPath) ? folderPath : rootFolder.AbsolutePath)))
+      .Where(target => !string.IsNullOrWhiteSpace(target.MessageId))
+      .DistinctBy(target => target.MessageId, StringComparer.Ordinal)
+      .ToArray();
+    var messageIds = messageTargets
+      .Select(target => target.MessageId)
+      .ToArray();
+    return new MailDownloadResult(
+      verification.MissingCount == 0,
+      message,
+      verification.PresentCount,
+      targetDirectory,
+      verification.ExpectedCount,
+      verification.PresentCount,
+      verification.MissingCount,
+      messageIds,
+      messageTargets);
   }
 
   private sealed record DownloadVerification(int ExpectedCount, int PresentCount, int MissingCount);

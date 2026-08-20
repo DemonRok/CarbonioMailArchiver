@@ -63,6 +63,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private int _downloadRetryDelaySeconds = 10;
   private SevenZipCompressionLevelOption _selectedSevenZipCompressionLevel = SevenZipCompressionLevelOption.Default;
   private bool _downloadVerificationSucceeded;
+  private IReadOnlyList<string> _verifiedDownloadMessageIds = [];
+  private IReadOnlyList<DownloadedMessageTarget> _verifiedDownloadMessageTargets = [];
+  private string _trashFolderId = string.Empty;
   private bool _isMoveInProgress;
   private int _timeoutSeconds = 100;
   private int _previewMessageLimit = 10;
@@ -170,6 +173,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     DownloadMessagesCommand = new AsyncRelayCommand(DownloadMessagesAsync, () => !IsMoveInProgress);
     VerifyDownloadedMessagesCommand = new AsyncRelayCommand(VerifyDownloadedMessagesAsync, () => !IsMoveInProgress);
     CompressMessagesCommand = new AsyncRelayCommand(CompressMessagesAsync, () => !IsMoveInProgress && _downloadVerificationSucceeded);
+    TrashDownloadedMessagesCommand = new AsyncRelayCommand(TrashDownloadedMessagesAsync, () => CanTrashDownloadedMessages);
     RefreshLogsCommand = new AsyncRelayCommand(RefreshLogsAsync);
     CopyLogsCommand = new AsyncRelayCommand(CopyLogsAsync);
     ClearLogsCommand = new AsyncRelayCommand(ClearLogsAsync);
@@ -207,6 +211,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   public ICommand DownloadMessagesCommand { get; }
   public ICommand VerifyDownloadedMessagesCommand { get; }
   public ICommand CompressMessagesCommand { get; }
+  public ICommand TrashDownloadedMessagesCommand { get; }
   public ICommand RefreshLogsCommand { get; }
   public ICommand CopyLogsCommand { get; }
   public ICommand ClearLogsCommand { get; }
@@ -573,13 +578,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       {
         compressCommand.RaiseCanExecuteChanged();
       }
+
+      if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+      {
+        trashCommand.RaiseCanExecuteChanged();
+      }
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
     }
   }
 
   public bool IsOperationIdle => !IsMoveInProgress;
 
   public bool CanCompressMessages => !IsMoveInProgress && _downloadVerificationSucceeded;
+
+  public bool CanTrashDownloadedMessages => !IsMoveInProgress
+    && _downloadVerificationSucceeded
+    && _verifiedDownloadMessageTargets.Count > 0
+    && !string.IsNullOrWhiteSpace(_trashFolderId);
 
   public int MoveProgressPercentage
   {
@@ -804,6 +820,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       IsMoveProgressIndeterminate = false;
     }
 
+    _trashFolderId = foldersById.Values
+      .FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/Trash", StringComparison.OrdinalIgnoreCase))?.Id
+      ?? string.Empty;
     AvailableFolders.Clear();
 
     foreach (var folder in foldersById.Values
@@ -1254,6 +1273,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    InvalidateDownloadVerification();
+
     var settings = ToSettings();
     var validationSettingsError = ValidateConnectionFields(settings);
     if (validationSettingsError is not null)
@@ -1467,6 +1488,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       return;
     }
 
+    InvalidateDownloadVerification();
+
     var settings = ToSettings();
     var validationSettingsError = ValidateConnectionFields(settings);
     if (validationSettingsError is not null)
@@ -1571,23 +1594,41 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = result.Message;
       UpdateOperationMetrics(result.PresentCount, result.ExpectedCount, rootFolder.AbsolutePath);
       _downloadVerificationSucceeded = result.IsSuccess && result.MissingCount == 0;
+      _verifiedDownloadMessageIds = _downloadVerificationSucceeded
+        ? result.MessageIds ?? []
+        : [];
+      _verifiedDownloadMessageTargets = _downloadVerificationSucceeded
+        ? result.MessageTargets ?? []
+        : [];
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
         compressCommand.RaiseCanExecuteChanged();
       }
+      if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+      {
+        trashCommand.RaiseCanExecuteChanged();
+      }
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
       await RefreshLogsAsync();
     }
     catch (OperationCanceledException)
     {
       StatusMessage = "Verifica EML annullata dall'utente.";
       _downloadVerificationSucceeded = false;
+      _verifiedDownloadMessageIds = [];
+      _verifiedDownloadMessageTargets = [];
       ClearOperationMetrics();
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
         compressCommand.RaiseCanExecuteChanged();
       }
+      if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+      {
+        trashCommand.RaiseCanExecuteChanged();
+      }
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
       ResetMoveProgress();
       await RefreshLogsAsync();
     }
@@ -1596,12 +1637,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       StatusMessage = $"Verifica EML non completata: {ex.Message}";
       IsMoveProgressIndeterminate = false;
       _downloadVerificationSucceeded = false;
+      _verifiedDownloadMessageIds = [];
+      _verifiedDownloadMessageTargets = [];
       ClearOperationMetrics();
       if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
       {
         compressCommand.RaiseCanExecuteChanged();
       }
+      if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+      {
+        trashCommand.RaiseCanExecuteChanged();
+      }
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
       await RefreshLogsAsync();
     }
     finally
@@ -1612,19 +1660,194 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
   }
 
-  private void InvalidateDownloadVerification()
+  private async Task TrashDownloadedMessagesAsync()
   {
-    if (!_downloadVerificationSucceeded)
+    if (IsMoveInProgress)
     {
       return;
     }
 
+    if (!_downloadVerificationSucceeded || _verifiedDownloadMessageTargets.Count == 0)
+    {
+      StatusMessage = "Esegui prima una verifica EML completata con esito positivo.";
+      return;
+    }
+
+    if (string.IsNullOrWhiteSpace(_trashFolderId))
+    {
+      await LoadFoldersAsync();
+      if (string.IsNullOrWhiteSpace(_trashFolderId))
+      {
+        StatusMessage = "Cartella Cestino non trovata nell'elenco delle cartelle Carbonio.";
+        return;
+      }
+    }
+
+    var settings = ToSettings();
+    var validationSettingsError = ValidateConnectionFields(settings);
+    if (validationSettingsError is not null)
+    {
+      StatusMessage = validationSettingsError;
+      return;
+    }
+
+    var messageTargets = _verifiedDownloadMessageTargets.ToArray();
+    var messageCount = messageTargets.Length;
+    var messageGroups = messageTargets
+      .GroupBy(target => target.SourceFolderPath, StringComparer.OrdinalIgnoreCase)
+      .OrderBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase)
+      .ToArray();
+    var batchSize = Math.Clamp(BatchSize, 10, 500);
+    var confirmation = MessageBox.Show(
+      $"Spostare nel Cestino le {messageCount} email risultate presenti nella verifica EML?\n\n" +
+      $"La struttura delle cartelle verra' ricreata sotto /Trash ({messageGroups.Length} cartelle sorgente).\n" +
+      "L'operazione non cancella i file EML locali.",
+      "Conferma spostamento nel Cestino",
+      MessageBoxButton.YesNo,
+      MessageBoxImage.Warning,
+      MessageBoxResult.No);
+    if (confirmation != MessageBoxResult.Yes)
+    {
+      StatusMessage = "Spostamento nel Cestino annullato.";
+      return;
+    }
+
+    var password = await GetPasswordAsync(settings);
+    using var trashCancellation = new CancellationTokenSource();
+    _moveCancellationTokenSource = trashCancellation;
+    IsMoveInProgress = true;
+    MoveProgressPercentage = 0;
+    MoveProgressPercentText = "0%";
+    MoveProgressText = "Spostamento nel Cestino in corso...";
+    MoveBatchText = "Preparazione";
+    MoveDetailText = $"0/{messageCount} messaggi spostati nel Cestino.";
+    IsMoveProgressIndeterminate = false;
+    StatusMessage = MoveProgressText;
+    BeginOperationMetrics();
+    StartOperationMetricsTimer();
+    var operationStartedAt = DateTimeOffset.Now;
+    var movedCount = 0;
+    var batchNumber = 0;
+
+    try
+    {
+      foreach (var messageGroup in messageGroups)
+      {
+        trashCancellation.Token.ThrowIfCancellationRequested();
+        var sourceFolder = new MailFolder
+        {
+          Id = messageGroup.First().SourceFolderPath,
+          AbsolutePath = messageGroup.Key,
+          Name = Path.GetFileName(messageGroup.Key.TrimEnd('/'))
+        };
+        MoveBatchText = "Preparazione Cestino";
+        MoveDetailText = $"Creazione destinazione /Trash per {messageGroup.Key}...";
+        MoveProgressText = MoveDetailText;
+        IsMoveProgressIndeterminate = true;
+        StatusMessage = MoveDetailText;
+        var destinationResolve = await _archiveFolderService.EnsureTrashDestinationAsync(settings, password, sourceFolder, trashCancellation.Token);
+        if (!destinationResolve.IsSuccess || destinationResolve.Folder is null)
+        {
+          MoveBatchText = "Spostamento nel Cestino interrotto";
+          MoveDetailText = destinationResolve.Message;
+          MoveProgressText = MoveDetailText;
+          StatusMessage = MoveDetailText;
+          await RefreshLogsAsync();
+          return;
+        }
+
+        IsMoveProgressIndeterminate = false;
+        var destinationPath = destinationResolve.Folder.AbsolutePath;
+        var sourceMessageIds = messageGroup.Select(target => target.MessageId).ToArray();
+        foreach (var messageIdBatch in sourceMessageIds.Chunk(batchSize))
+        {
+          trashCancellation.Token.ThrowIfCancellationRequested();
+          batchNumber++;
+          UpdateMoveProgress(
+            movedCount,
+            messageCount,
+            $"Batch Cestino {batchNumber} in corso",
+            $"{messageGroup.Key} -> {destinationPath}: spostati {movedCount}/{messageCount} messaggi.");
+          UpdateOperationMetrics(movedCount, messageCount, messageGroup.Key);
+          StatusMessage = $"{MoveBatchText}. {MoveDetailText}";
+
+          var moveResult = await MoveMessagesWithRetryAsync(
+            settings,
+            password,
+            messageIdBatch,
+            destinationResolve.Folder.Id,
+            settings.DownloadRetryCount,
+            settings.DownloadRetryDelaySeconds,
+            trashCancellation.Token);
+          if (!moveResult.IsSuccess)
+          {
+            MoveBatchText = "Spostamento nel Cestino interrotto";
+            MoveDetailText = $"Spostati {movedCount}/{messageCount}. Errore: {moveResult.Fault?.Reason ?? "risposta non valida"}.";
+            MoveProgressText = MoveDetailText;
+            StatusMessage = MoveDetailText;
+            await RefreshLogsAsync();
+            return;
+          }
+
+          var previousMovedCount = movedCount;
+          movedCount += moveResult.MovedCount;
+          UpdateOperationMetrics(movedCount, messageCount, messageGroup.Key);
+          await AnimateMoveProgressAsync(
+            previousMovedCount,
+            movedCount,
+            messageCount,
+            $"Batch Cestino {batchNumber} completato",
+            "Spostati nel Cestino: ",
+            trashCancellation.Token);
+        }
+      }
+
+      _verifiedDownloadMessageIds = [];
+      _verifiedDownloadMessageTargets = [];
+      if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+      {
+        trashCommand.RaiseCanExecuteChanged();
+      }
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
+      UpdateMoveProgress(movedCount, messageCount, "Spostamento nel Cestino completato", $"{movedCount} email spostate nel Cestino.");
+      UpdateOperationMetrics(movedCount, messageCount, "Cestino");
+      StatusMessage = $"Spostamento nel Cestino completato. Email spostate: {movedCount}.";
+      ShowMoveCompletedMessage(movedCount, DateTimeOffset.Now - operationStartedAt);
+      await ReloadFoldersAfterOperationAsync("spostamento email scaricate nel Cestino");
+      await RefreshLogsAsync();
+    }
+    catch (OperationCanceledException)
+    {
+      StatusMessage = $"Spostamento nel Cestino annullato. Email spostate: {movedCount}/{messageCount}.";
+      MoveProgressText = "Spostamento nel Cestino annullato.";
+      MoveBatchText = "Spostamento annullato";
+      MoveDetailText = $"Email spostate: {movedCount}/{messageCount}.";
+      await RefreshLogsAsync();
+    }
+    finally
+    {
+      ClearOperationMetrics();
+      StopOperationMetricsTimer();
+      IsMoveInProgress = false;
+      _moveCancellationTokenSource = null;
+    }
+  }
+
+  private void InvalidateDownloadVerification()
+  {
     _downloadVerificationSucceeded = false;
+    _verifiedDownloadMessageIds = [];
+    _verifiedDownloadMessageTargets = [];
     if (CompressMessagesCommand is AsyncRelayCommand compressCommand)
     {
       compressCommand.RaiseCanExecuteChanged();
     }
+    if (TrashDownloadedMessagesCommand is AsyncRelayCommand trashCommand)
+    {
+      trashCommand.RaiseCanExecuteChanged();
+    }
     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanCompressMessages)));
+    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanTrashDownloadedMessages)));
   }
 
   private async Task CompressMessagesAsync()
@@ -3020,7 +3243,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     });
   }
 
-  private async Task<ArchiveFolderEnsureResult> ResolveMoveDestinationAsync(
+  private async Task<FolderTreeEnsureResult> ResolveMoveDestinationAsync(
     CarbonioConnectionSettings settings,
     string password,
     FolderSelectionViewModel sourceFolder,
@@ -3028,7 +3251,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   {
     if (!UseArchiveDestination)
     {
-      return new ArchiveFolderEnsureResult(true, ToMailFolder(SelectedDestinationFolder!), "Destinazione selezionata pronta.", []);
+      return new FolderTreeEnsureResult(true, ToMailFolder(SelectedDestinationFolder!), "Destinazione selezionata pronta.", []);
     }
 
     MoveBatchText = "Preparazione Archivio";

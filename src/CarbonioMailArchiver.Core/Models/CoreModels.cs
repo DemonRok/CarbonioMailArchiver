@@ -39,7 +39,9 @@ public sealed record MailMoveResult(int RequestedCount, int MovedCount, IReadOnl
   public bool IsSuccess => Fault is null && FailedMessageIds.Count == 0 && MovedCount == RequestedCount;
 }
 
-public sealed record ArchiveFolderEnsureResult(bool IsSuccess, MailFolder? Folder, string Message, IReadOnlyList<string> CreatedPaths);
+public sealed record FolderTreeEnsureResult(bool IsSuccess, MailFolder? Folder, string Message, IReadOnlyList<string> CreatedPaths);
+
+public sealed record DownloadedMessageTarget(string MessageId, string SourceFolderPath);
 
 public sealed record FolderDeletePlanResult(bool IsSuccess, string Message, IReadOnlyList<string> CandidatePaths);
 
@@ -65,7 +67,9 @@ public sealed record MailDownloadResult(
   string TargetDirectory,
   int ExpectedCount = 0,
   int PresentCount = 0,
-  int MissingCount = 0);
+  int MissingCount = 0,
+  IReadOnlyList<string>? MessageIds = null,
+  IReadOnlyList<DownloadedMessageTarget>? MessageTargets = null);
 
 public enum ArchiveOperationMode
 {

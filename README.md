@@ -25,6 +25,7 @@ Licenza: MIT. Autore: Mauro Bettinelli.
 - limite opzionale di velocita' download in KB/s (`0` = senza limite);
 - retry configurabili per i download falliti, con ritardo progressivo;
 - verifica dei file EML scaricati e compressione 7z disponibile dopo una verifica riuscita;
+- spostamento nel Cestino delle email scaricate dopo una verifica EML riuscita, con conferma;
 - configurazione dedicata con reset default e descrizione chiara delle opzioni;
 - tab Info con versione, percorsi, licenza e link utili;
 
@@ -60,6 +61,7 @@ Il pulsante `Scarica EML` nella schermata principale scarica tutti gli `.eml` de
 - La cartella locale di base e' configurabile; sotto questa viene creata una directory con il nome della casella e poi il contenuto della radice scaricata, ad esempio `Downloads\utente@example.test\Inbox\APC` per `/Archive/Inbox/APC`.
 - Il limite velocita' e' espresso in KB/s; `0` significa nessun limite applicato dall'app.
 - I file gia' presenti vengono saltati per consentire il resume; la verifica EML confronta i messaggi attesi con i file locali prima di abilitare la compressione.
+- Dopo una verifica riuscita e' possibile spostare nel Cestino le email verificate; i file EML locali non vengono cancellati. La struttura delle cartelle sorgente viene ricreata sotto `/Trash`, ad esempio `/Inbox/Animali/Esempio` diventa `/Trash/Inbox/Animali/Esempio`.
 
 ## Modalita Archivio
 

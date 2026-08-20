@@ -2,6 +2,13 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.11.0] - 2026-08-20
+
+- Aggiunto il comando per spostare nel Cestino le email risultate presenti dopo una verifica EML riuscita.
+- Il comando usa l'elenco dei messaggi verificati, richiede conferma e mantiene i file EML locali.
+- Ricreata sotto `/Trash` la struttura delle cartelle sorgente, creando automaticamente i livelli mancanti.
+- Aggiunti batch, retry, avanzamento e annullamento allo spostamento nel Cestino.
+
 ## [1.10.4] - 2026-08-20
 
 - Salvato anche il percorso della cartella da scaricare per ripristinare correttamente la selezione dopo il riavvio.
