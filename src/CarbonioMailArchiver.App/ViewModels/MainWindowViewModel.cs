@@ -1237,15 +1237,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
     OperationFileText = "File: conteggio in corso";
     _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, 0, 0, TimeSpan.Zero);
-    _stableDownloadEtaText = "ETA in calcolo";
-    _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
-    _downloadStartedAt = DateTimeOffset.Now;
-    ResetDownloadWarmupThresholds();
+    ResetDownloadProgressTimer();
     StartDownloadMetricsTimer();
     StatusMessage = MoveDetailText;
 
     var progress = new Progress<MailDownloadProgress>(downloadProgress =>
     {
+      if (_lastDownloadProgress is not null
+        && _lastDownloadProgress.TotalCount <= 0
+        && downloadProgress.TotalCount > 0)
+      {
+        ResetDownloadProgressTimer();
+      }
+
       _lastDownloadProgress = downloadProgress;
       if (downloadProgress.TotalCount <= 0)
       {
@@ -2671,6 +2675,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     };
     _downloadMetricsTimer.Tick += DownloadMetricsTimer_OnTick;
     _downloadMetricsTimer.Start();
+  }
+
+  private void ResetDownloadProgressTimer()
+  {
+    _stableDownloadEtaText = "ETA in calcolo";
+    _lastDownloadEtaUpdate = DateTimeOffset.MinValue;
+    _downloadStartedAt = DateTimeOffset.Now;
+    ResetDownloadWarmupThresholds();
+    OperationElapsedText = "Trascorso: 0s";
+    OperationSpeedText = "Velocita': in calcolo";
+    OperationEtaText = "ETA: in calcolo";
   }
 
   private void StopDownloadMetricsTimer()

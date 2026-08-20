@@ -2,12 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.23] - 2026-08-20
+
+- Il timer del download EML riparte da zero quando termina la scansione iniziale e comincia il trasferimento reale.
+
 ## [1.8.22] - 2026-08-20
-
-- Aggiunto riepilogo finale nei popup di chiusura per spostamento batch e download EML.
-- Pausati i timer operativi mentre sono aperte le finestre di conferma.
-
-## [1.8.19] - 2026-08-04
 
 - Sostituita la conferma modale sulla cancellazione delle cartelle vuote con una finestra dedicata non bloccante, così la preview resta consultabile.
 
