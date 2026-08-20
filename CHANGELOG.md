@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.10.3] - 2026-08-20
+
+- Preservata la cartella da scaricare selezionata manualmente quando e' attiva l'opzione Archivio.
+- Disattivando Archivio viene ripristinata la cartella salvata, senza sostituirla con `/Archive`.
+
 ## [1.10.2] - 2026-08-20
 
 - La dimensione delle email gia' presenti e saltate viene inclusa nei dati contabilizzati del download.

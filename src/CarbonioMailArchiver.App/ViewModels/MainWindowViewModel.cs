@@ -101,6 +101,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _downloadMetricsTimerWasRunningBeforeConfirmation;
   private bool _operationMetricsTimerWasRunningBeforeConfirmation;
   private bool _suppressSpecialFolderReload;
+  private bool _restoringFolderSelections;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
@@ -378,7 +379,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       SetField(ref _selectedSourceFolder, value);
-      if (value is not null)
+      if (value is not null && !_restoringFolderSelections)
       {
         _lastSourceFolderId = value.Id;
       }
@@ -398,7 +399,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       SetField(ref _selectedDestinationFolder, value);
-      if (value is not null)
+      if (value is not null && !_restoringFolderSelections)
       {
         _lastDestinationFolderId = value.Id;
       }
@@ -816,15 +817,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AvailableFolders.Add(new FolderSelectionViewModel(folder));
     }
 
-    SelectedSourceFolder = DownloadEntireMailbox
-      ? AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase))
-        ?? AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
-      : AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
-        ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
-        ?? AvailableFolders.FirstOrDefault();
-    SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId && folder.Id != SelectedSourceFolder?.Id)
-      ?? AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id)
-      ?? SelectedSourceFolder;
+    _restoringFolderSelections = true;
+    try
+    {
+      SelectedSourceFolder = DownloadEntireMailbox
+        ? AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase))
+          ?? AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
+        : AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
+          ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
+          ?? AvailableFolders.FirstOrDefault();
+      SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId && folder.Id != SelectedSourceFolder?.Id)
+        ?? AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id)
+        ?? SelectedSourceFolder;
+    }
+    finally
+    {
+      _restoringFolderSelections = false;
+    }
     StatusMessage = AvailableFolders.Count == 0
       ? "Nessuna cartella ricevuta dal server; la ricerca usera' Inbox."
       : $"Cartelle caricate: {AvailableFolders.Count}.";
