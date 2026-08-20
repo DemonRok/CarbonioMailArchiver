@@ -125,11 +125,11 @@
 
                             <CheckBox Grid.Row="7"
                                       Grid.Column="1"
-                                      Content="Usa Archivio come destinazione e crea il percorso sotto /Archive"
+                                      Content="Usa Archivio come cartella da scaricare"
                                       IsChecked="{Binding UseArchiveDestination}"
                                       Margin="0,0,0,10" />
 
-                            <TextBlock Grid.Row="8" Text="Destinazione" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <TextBlock Grid.Row="8" Text="Cartella da scaricare" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <ComboBox Grid.Row="8" Grid.Column="1"
                                       ItemsSource="{Binding AvailableFolders}"
                                       SelectedItem="{Binding SelectedDestinationFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

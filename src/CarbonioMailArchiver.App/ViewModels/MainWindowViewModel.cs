@@ -54,6 +54,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _useArchiveDestination;
   private bool _includeSourceSubfolders;
   private bool _downloadEntireMailbox;
+  private string _sourceFolderIdBeforeEntireMailbox = string.Empty;
   private bool _promptReportExportAfterMove = true;
   private string _downloadRootDirectory = string.Empty;
   private int _downloadSpeedLimitKbps;
@@ -346,6 +347,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
 
       SetField(ref _downloadEntireMailbox, value);
+      if (value)
+      {
+        _sourceFolderIdBeforeEntireMailbox = SelectedSourceFolder?.Id ?? _lastSourceFolderId;
+        SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase))
+          ?? SelectedSourceFolder;
+      }
+      else if (!string.IsNullOrWhiteSpace(_sourceFolderIdBeforeEntireMailbox))
+      {
+        SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _sourceFolderIdBeforeEntireMailbox)
+          ?? SelectedSourceFolder;
+        _sourceFolderIdBeforeEntireMailbox = string.Empty;
+      }
+
       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSearchBeforeDateEnabled)));
       InvalidateDownloadVerification();
     }
@@ -802,9 +816,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AvailableFolders.Add(new FolderSelectionViewModel(folder));
     }
 
-    SelectedSourceFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
-      ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
-      ?? AvailableFolders.FirstOrDefault();
+    SelectedSourceFolder = DownloadEntireMailbox
+      ? AvailableFolders.FirstOrDefault(folder => string.Equals(folder.AbsolutePath, "/", StringComparison.OrdinalIgnoreCase))
+        ?? AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
+      : AvailableFolders.FirstOrDefault(folder => folder.Id == _lastSourceFolderId)
+        ?? AvailableFolders.FirstOrDefault(folder => folder.Id == "2")
+        ?? AvailableFolders.FirstOrDefault();
     SelectedDestinationFolder = AvailableFolders.FirstOrDefault(folder => folder.Id == _lastDestinationFolderId && folder.Id != SelectedSourceFolder?.Id)
       ?? AvailableFolders.FirstOrDefault(folder => folder.Id != SelectedSourceFolder?.Id)
       ?? SelectedSourceFolder;
@@ -1261,7 +1278,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
       StatusMessage = UseArchiveDestination
         ? "Cartella /Archive non trovata. Carica le cartelle e verifica che Archivio sia attivo sul server."
-        : "Seleziona una cartella destinazione da scaricare, oppure abilita Archivio.";
+        : "Seleziona una cartella da scaricare, oppure abilita Archivio.";
       return;
     }
 
@@ -1381,6 +1398,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       IsMoveProgressIndeterminate = false;
       MoveBatchText = "Download completato";
       MoveDetailText = $"{result.DownloadedCount} messaggi completati in {result.TargetDirectory}.";
+      var completedDownloadElapsed = _downloadStartedAt == DateTimeOffset.MinValue
+        ? TimeSpan.Zero
+        : DateTimeOffset.Now - _downloadStartedAt;
       StopDownloadMetricsTimer();
       OperationMetricsText = string.Empty;
       OperationSkippedText = string.Empty;
@@ -1395,7 +1415,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       await RefreshLogsAsync();
       ShowDownloadCompletedMessage(
         result.DownloadedCount,
-        DateTimeOffset.Now - _downloadStartedAt,
+        completedDownloadElapsed,
         result.TargetDirectory);
     }
     catch (OperationCanceledException)

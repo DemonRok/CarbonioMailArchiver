@@ -2,6 +2,12 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.10.1] - 2026-08-20
+
+- Durante il download dell'intera casella, la sorgente viene impostata automaticamente su `/`.
+- Rese piu' esplicite le etichette della cartella remota da scaricare e dell'opzione Archivio.
+- Corretto il tempo mostrato nel popup al termine del download EML.
+
 ## [1.10.0] - 2026-08-20
 
 - Aggiunta la modalità di download dell'intera casella con ricostruzione ricorsiva dell'albero delle cartelle.
