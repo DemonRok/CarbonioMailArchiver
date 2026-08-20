@@ -2,11 +2,12 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.8.24] - 2026-08-20
+
+- Dopo lo spostamento, le cartelle vengono ricaricate automaticamente.
+- Nel download EML l'indicazione dei dati scaricati non resta vincolata a MB e scala correttamente fino a GB.
+
 ## [1.8.23] - 2026-08-20
-
-- Il timer del download EML riparte da zero quando termina la scansione iniziale e comincia il trasferimento reale.
-
-## [1.8.22] - 2026-08-20
 
 - Sostituita la conferma modale sulla cancellazione delle cartelle vuote con una finestra dedicata non bloccante, così la preview resta consultabile.
 

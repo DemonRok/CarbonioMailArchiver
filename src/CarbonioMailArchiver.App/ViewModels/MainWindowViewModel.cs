@@ -881,6 +881,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     PreviewMessages.Clear();
     StatusMessage = $"Spostamento completato. Messaggi spostati: {result.MovedCount}.";
+    await LoadFoldersAsync();
     await RefreshLogsAsync();
     ShowMoveCompletedMessage(result.MovedCount, TimeSpan.Zero);
   }
@@ -1119,6 +1120,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         "Completato",
         CancellationToken.None);
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
+      await LoadFoldersAsync();
       await RefreshLogsAsync();
       ShowMoveCompletedMessage(movedCount, DateTimeOffset.Now - operationStartedAt);
       StopOperationMetricsTimer();
@@ -2754,7 +2756,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       : string.Empty;
     OperationElapsedText = $"Trascorso: {FormatDuration(elapsed)}";
     OperationSpeedText = $"Velocita': {speedText}";
-    OperationDownloadedText = $"MB scaricati: {FormatBytes(progress.BytesDownloaded)}. Completati: {progress.CompletedCount.ToString(CultureInfo.InvariantCulture)}/{Math.Max(progress.TotalCount, 0).ToString(CultureInfo.InvariantCulture)}.{skippedText}";
+    OperationDownloadedText = $"Dati scaricati: {FormatBytes(progress.BytesDownloaded)}. Completati: {progress.CompletedCount.ToString(CultureInfo.InvariantCulture)}/{Math.Max(progress.TotalCount, 0).ToString(CultureInfo.InvariantCulture)}.{skippedText}";
     OperationEtaText = _stableDownloadEtaText.StartsWith("ETA:", StringComparison.Ordinal)
       ? _stableDownloadEtaText
       : "ETA: in calcolo";
