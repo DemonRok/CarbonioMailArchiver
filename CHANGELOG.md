@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.12.0] - 2026-08-20
+
+- Aggiunta l'opzione per ridurre l'app nella traybar invece che nella barra delle applicazioni.
+- Aggiunti ripristino con doppio clic o menu `Apri` e chiusura dal menu `Esci`.
+
 ## [1.11.0] - 2026-08-20
 
 - Aggiunto il comando per spostare nel Cestino le email risultate presenti dopo una verifica EML riuscita.

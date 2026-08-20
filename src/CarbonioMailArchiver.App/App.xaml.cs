@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CarbonioMailArchiver.App;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
   private readonly IHost _host;
 

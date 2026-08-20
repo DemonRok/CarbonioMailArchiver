@@ -28,6 +28,7 @@ Licenza: MIT. Autore: Mauro Bettinelli.
 - spostamento nel Cestino delle email scaricate dopo una verifica EML riuscita, con conferma;
 - configurazione dedicata con reset default e descrizione chiara delle opzioni;
 - tab Info con versione, percorsi, licenza e link utili;
+- riduzione configurabile nella traybar di Windows, con ripristino dal doppio clic o dal menu dell'icona;
 
 ## Avvio rapido
 

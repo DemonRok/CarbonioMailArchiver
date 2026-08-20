@@ -17,6 +17,9 @@ using CarbonioMailArchiver.Infrastructure.Configuration;
 using CarbonioMailArchiver.Infrastructure.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
+using Application = System.Windows.Application;
+using Clipboard = System.Windows.Clipboard;
+using MessageBox = System.Windows.MessageBox;
 
 namespace CarbonioMailArchiver.App.ViewModels;
 
@@ -51,6 +54,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private bool _rememberCredentials;
   private bool _diagnosticSoapLoggingEnabled;
   private bool _autoLoadFoldersOnStartup;
+  private bool _minimizeToTray = true;
   private bool _showSpecialFolders;
   private bool _useArchiveDestination;
   private bool _includeSourceSubfolders;
@@ -458,6 +462,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     set => SetField(ref _autoLoadFoldersOnStartup, value);
   }
 
+  public bool MinimizeToTray
+  {
+    get => _minimizeToTray;
+    set => SetField(ref _minimizeToTray, value);
+  }
+
   public bool ShowSpecialFolders
   {
     get => _showSpecialFolders;
@@ -713,6 +723,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       RememberCredentials = settings.RememberCredentials;
       DiagnosticSoapLoggingEnabled = settings.DiagnosticSoapLoggingEnabled;
       AutoLoadFoldersOnStartup = settings.AutoLoadFoldersOnStartup;
+      MinimizeToTray = settings.MinimizeToTray;
       ShowSpecialFolders = settings.ShowSpecialFolders;
       UseArchiveDestination = settings.UseArchiveDestination;
       IncludeSourceSubfolders = settings.IncludeSourceSubfolders;
@@ -2647,6 +2658,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     BatchSize = 250;
     MaxMessagesToMove = 0;
     AutoLoadFoldersOnStartup = false;
+    MinimizeToTray = true;
     ShowSpecialFolders = false;
     UseArchiveDestination = false;
     IncludeSourceSubfolders = false;
@@ -2763,6 +2775,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       AcceptUntrustedCertificates = false,
       DiagnosticSoapLoggingEnabled = DiagnosticSoapLoggingEnabled,
       AutoLoadFoldersOnStartup = AutoLoadFoldersOnStartup,
+      MinimizeToTray = MinimizeToTray,
       ShowSpecialFolders = ShowSpecialFolders,
       TimeoutSeconds = Math.Clamp(TimeoutSeconds, 5, 600),
       PreviewMessageLimit = Math.Clamp(PreviewMessageLimit, 1, 100),

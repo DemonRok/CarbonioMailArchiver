@@ -54,6 +54,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -302,6 +303,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Timeout SOAP" VerticalAlignment="Center" Margin="0,0,12,12" />
@@ -453,20 +455,25 @@
                               Margin="0,0,0,10" />
                     <CheckBox Grid.Row="7"
                               Grid.Column="1"
+                              Content="Riduci a icona nella traybar invece che nella barra delle applicazioni"
+                              IsChecked="{Binding MinimizeToTray}"
+                              Margin="0,0,0,10" />
+                    <CheckBox Grid.Row="8"
+                              Grid.Column="1"
                               Content="Mostra anche cartelle speciali (Calendar, Drafts, Junk, Trash, Chats, Emailed Contacts)"
                               IsChecked="{Binding ShowSpecialFolders}"
                               Margin="0,0,0,10" />
-                    <CheckBox Grid.Row="8"
+                    <CheckBox Grid.Row="9"
                               Grid.Column="1"
                               Content="Logging diagnostico API/SOAP (senza password)"
                               IsChecked="{Binding DiagnosticSoapLoggingEnabled}"
                               Margin="0,0,0,10" />
-                    <CheckBox Grid.Row="9"
+                    <CheckBox Grid.Row="10"
                               Grid.Column="1"
                               Content="Chiedi se esportare il report CSV al termine dello spostamento"
                               IsChecked="{Binding PromptReportExportAfterMove}"
                               Margin="0,0,0,10" />
-                    <StackPanel Grid.Row="10" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                    <StackPanel Grid.Row="11" Grid.ColumnSpan="2" Margin="0,8,0,0">
                         <TextBlock Text="Opzioni disponibili" FontWeight="SemiBold" Margin="0,0,0,6" />
                         <TextBlock Text="• Timeout SOAP: tempo massimo di attesa per ogni richiesta al server." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Preview: quante email vengono mostrate dal Test ricerca, senza spostarle; valore da 1 a 100." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -476,6 +483,7 @@
                         <TextBlock Text="• Velocita' download: limite in KB/s; 0 lascia il download senza limite." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Retry download: tentativi e ritardo progressivo per i download falliti." Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,4" />
                         <TextBlock Text="• Compressione 7z: livello usato per gli archivi creati dai download EML." Foreground="#555" TextWrapping="Wrap" />
+                        <TextBlock Text="• Traybar: se attiva, riducendo a icona l'app scompare dalla barra delle applicazioni e resta nell'area di notifica." Foreground="#555" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,8,0,0">
                             <Button Content="Ripristina default"
                                     Command="{Binding RestoreConfigurationDefaultsCommand}"
