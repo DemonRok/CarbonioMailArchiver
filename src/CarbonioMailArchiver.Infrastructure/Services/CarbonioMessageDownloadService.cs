@@ -47,6 +47,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
     var totalCount = 0;
     var operationStopwatch = Stopwatch.StartNew();
     long totalBytesDownloaded = 0;
+    long totalBytesAccounted = 0;
     var skippedCount = 0;
     var downloadedThisSessionCount = 0;
     var completedCount = 0;
@@ -57,7 +58,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Conteggio messaggi...", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
         var messages = await SearchAllMessagesAsync(
           client,
           folder,
@@ -66,7 +67,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           pageCount =>
           {
             countedMessageCount += pageCount;
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
           },
           cancellationToken);
         messagesByFolder[folder.Id] = messages;
@@ -90,13 +91,14 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           if (File.Exists(filePath))
           {
             await RepairMessageFileTimestampAsync(filePath, message.Date, cancellationToken);
+            totalBytesAccounted += new FileInfo(filePath).Length;
             skippedCount++;
             completedCount++;
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"{fileName} gia' presente, salto.", completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
             continue;
           }
 
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
           var download = await DownloadMessageWithRetryAsync(
             client,
             message,
@@ -108,7 +110,8 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
             bytesCopied =>
             {
               totalBytesDownloaded += bytesCopied;
-              progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+              totalBytesAccounted += bytesCopied;
+              progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
             },
             cancellationToken);
           if (!download.IsSuccess)
@@ -120,7 +123,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
           completedCount++;
           downloadedThisSessionCount++;
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, operationStopwatch.Elapsed));
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, Path.GetFileName(filePath), completedCount, totalCount, skippedCount, downloadedThisSessionCount, totalBytesDownloaded, totalBytesAccounted, operationStopwatch.Elapsed));
         }
       }
 
@@ -197,7 +200,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           try
           {
             cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, 0, operationStopwatch.Elapsed));
             var messages = await SearchAllMessagesAsync(
               client,
               folder,
@@ -206,7 +209,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
               pageCount =>
               {
                 var counted = Interlocked.Add(ref countedMessageCount, pageCount);
-                progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {counted} trovati", counted, 0, 0, 0, 0, operationStopwatch.Elapsed));
+                progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {counted} trovati", counted, 0, 0, 0, 0, 0, operationStopwatch.Elapsed));
               },
               cancellationToken);
             return (FolderId: folder.Id, Messages: messages);
@@ -234,7 +237,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       foreach (var folder in folders)
       {
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+        progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica messaggi...", countedMessageCount, 0, 0, 0, 0, 0, operationStopwatch.Elapsed));
         var messages = await SearchAllMessagesAsync(
           client,
           folder,
@@ -243,7 +246,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
           pageCount =>
           {
             countedMessageCount += pageCount;
-            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
+            progress?.Report(new MailDownloadProgress(folder.AbsolutePath, $"Conteggio messaggi: {countedMessageCount} trovati", countedMessageCount, 0, 0, 0, 0, 0, operationStopwatch.Elapsed));
           },
           cancellationToken);
         messagesByFolder[folder.Id] = messages;
@@ -260,7 +263,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
       verification.PresentCount,
       verification.ExpectedCount,
       verification.MissingCount);
-    progress?.Report(new MailDownloadProgress(rootFolder.AbsolutePath, "Verifica completata.", verification.PresentCount, verification.ExpectedCount, 0, 0, 0, operationStopwatch.Elapsed));
+    progress?.Report(new MailDownloadProgress(rootFolder.AbsolutePath, "Verifica completata.", verification.PresentCount, verification.ExpectedCount, 0, 0, 0, 0, operationStopwatch.Elapsed));
     return new MailDownloadResult(verification.MissingCount == 0, message, verification.PresentCount, targetDirectory, verification.ExpectedCount, verification.PresentCount, verification.MissingCount);
   }
 
@@ -319,7 +322,7 @@ public sealed class CarbonioMessageDownloadService(ILogger<CarbonioMessageDownlo
 
         if (processedCount % 250 == 0)
         {
-          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica file locali...", presentCount, expectedCount, 0, 0, 0, TimeSpan.Zero));
+          progress?.Report(new MailDownloadProgress(folder.AbsolutePath, "Verifica file locali...", presentCount, expectedCount, 0, 0, 0, 0, TimeSpan.Zero));
         }
       }
     }

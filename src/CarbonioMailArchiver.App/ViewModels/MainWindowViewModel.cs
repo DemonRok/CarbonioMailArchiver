@@ -1329,7 +1329,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationEtaText = "ETA: in calcolo";
     OperationFolderText = $"Cartella: {rootFolder.AbsolutePath}";
     OperationFileText = string.Empty;
-    _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, 0, 0, TimeSpan.Zero);
+    _lastDownloadProgress = new MailDownloadProgress(rootFolder.AbsolutePath, "Conteggio messaggi...", 0, 0, 0, 0, 0, 0, TimeSpan.Zero);
     ResetDownloadProgressTimer();
     StartDownloadMetricsTimer();
     StatusMessage = MoveDetailText;
@@ -2945,7 +2945,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     OperationElapsedText = $"Trascorso: {FormatDuration(elapsed)}";
     OperationSpeedText = $"Velocita': {speedText}";
     OperationDownloadedText = progress.TotalCount > 0
-      ? $"Dati scaricati: {FormatBytes(progress.BytesDownloaded)}."
+      ? $"Dati scaricati: {FormatBytes(progress.BytesAccounted)}."
       : "Dati scaricati: 0 B.";
     OperationEtaText = _stableDownloadEtaText.StartsWith("ETA:", StringComparison.Ordinal)
       ? _stableDownloadEtaText

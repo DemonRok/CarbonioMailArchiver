@@ -2,6 +2,11 @@
 
 Tutte le modifiche principali di Carbonio Mail Archiver sono documentate in questo file.
 
+## [1.10.2] - 2026-08-20
+
+- La dimensione delle email gia' presenti e saltate viene inclusa nei dati contabilizzati del download.
+- La velocita' resta calcolata solo sui byte trasferiti effettivamente.
+
 ## [1.10.1] - 2026-08-20
 
 - Durante il download dell'intera casella, la sorgente viene impostata automaticamente su `/`.

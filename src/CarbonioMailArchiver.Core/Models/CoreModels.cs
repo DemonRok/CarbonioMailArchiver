@@ -55,6 +55,7 @@ public sealed record MailDownloadProgress(
   int SkippedCount,
   int DownloadedThisSessionCount,
   long BytesDownloaded,
+  long BytesAccounted,
   TimeSpan Elapsed);
 
 public sealed record MailDownloadResult(

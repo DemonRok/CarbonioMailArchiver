@@ -106,7 +106,7 @@
                                           Margin="16,0,0,0" />
                             </StackPanel>
 
-                            <TextBlock Grid.Row="6" Text="Sorgente" VerticalAlignment="Center" Margin="0,0,12,12" />
+                            <TextBlock Grid.Row="6" Text="Sorgente spostamento" VerticalAlignment="Center" Margin="0,0,12,12" />
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
                                 <ComboBox ItemsSource="{Binding AvailableFolders}"
                                           SelectedItem="{Binding SelectedSourceFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
