@@ -882,7 +882,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     PreviewMessages.Clear();
     StatusMessage = $"Spostamento completato. Messaggi spostati: {result.MovedCount}.";
     await RefreshLogsAsync();
-    ShowMoveCompletedMessage();
+    ShowMoveCompletedMessage(result.MovedCount, TimeSpan.Zero);
   }
 
   private async Task MoveAllSearchResultsAsync()
@@ -1120,7 +1120,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         CancellationToken.None);
       StatusMessage = $"Spostamento batch completato. Messaggi spostati: {movedCount}.{FormatReportStatus(successReportPath)}";
       await RefreshLogsAsync();
-      ShowMoveCompletedMessage();
+      ShowMoveCompletedMessage(movedCount, DateTimeOffset.Now - operationStartedAt);
       StopOperationMetricsTimer();
     }
     catch (OperationCanceledException)
@@ -1308,11 +1308,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       MoveProgressText = MoveDetailText;
       StatusMessage = result.Message;
       await RefreshLogsAsync();
-      MessageBox.Show(
-        "Download EML completato.",
-        "Download completato",
-        MessageBoxButton.OK,
-        MessageBoxImage.Information);
+      ShowDownloadCompletedMessage(
+        result.DownloadedCount,
+        DateTimeOffset.Now - _downloadStartedAt,
+        result.TargetDirectory);
     }
     catch (OperationCanceledException)
     {
@@ -1944,11 +1943,20 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       : $" Report: {reportPath}";
   }
 
-  private static void ShowMoveCompletedMessage()
+  private static void ShowMoveCompletedMessage(int movedCount, TimeSpan elapsed)
   {
     MessageBox.Show(
-      "Spostamento completato.",
+      $"Spostamento completato.\nMessaggi spostati: {movedCount}\nTempo trascorso: {FormatDuration(elapsed)}",
       "Spostamento completato",
+      MessageBoxButton.OK,
+      MessageBoxImage.Information);
+  }
+
+  private static void ShowDownloadCompletedMessage(int downloadedCount, TimeSpan elapsed, string targetDirectory)
+  {
+    MessageBox.Show(
+      $"Download EML completato.\nEmail scaricate: {downloadedCount}\nTempo trascorso: {FormatDuration(elapsed)}\nDestinazione: {targetDirectory}",
+      "Download completato",
       MessageBoxButton.OK,
       MessageBoxImage.Information);
   }
