@@ -94,6 +94,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
   private TimeSpan _downloadEtaWarmupThreshold = TimeSpan.FromSeconds(75);
   private DispatcherTimer? _downloadMetricsTimer;
   private DispatcherTimer? _operationMetricsTimer;
+  private bool _downloadMetricsTimerWasRunningBeforeConfirmation;
+  private bool _operationMetricsTimerWasRunningBeforeConfirmation;
   private CancellationTokenSource? _moveCancellationTokenSource;
   private readonly AsyncRelayCommand _moveAllSearchResultsCommand;
   private readonly AsyncRelayCommand _cancelMoveCommand;
@@ -834,12 +836,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     var sourceFolder = SelectedSourceFolder!;
     var destinationFolder = GetPlannedDestinationFolder(sourceFolder);
+    PauseMetricsForConfirmation();
     var confirmation = MessageBox.Show(
       $"Spostare realmente {PreviewMessages.Count} messaggi da {sourceFolder.AbsolutePath} a {destinationFolder.AbsolutePath}?",
       "Conferma spostamento",
       MessageBoxButton.YesNo,
       MessageBoxImage.Warning,
       MessageBoxResult.No);
+    ResumeMetricsAfterConfirmation();
     if (confirmation != MessageBoxResult.Yes)
     {
       StatusMessage = "Spostamento annullato.";
@@ -1202,12 +1206,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     var speedText = DownloadSpeedLimitKbps == 0
       ? "senza limite di velocita'"
       : $"{DownloadSpeedLimitKbps.ToString(CultureInfo.InvariantCulture)} KB/s";
+    PauseMetricsForConfirmation();
     var confirmation = MessageBox.Show(
       $"Scaricare in formato EML la cartella {rootFolder.AbsolutePath} e le sue sottocartelle?\n\nCartelle da scandire: {foldersToDownload.Length}\nDestinazione locale: {settings.DownloadRootDirectory}\\{settings.Email}\nVelocita': {speedText}",
       "Conferma download EML",
       MessageBoxButton.YesNo,
       MessageBoxImage.Question,
       MessageBoxResult.No);
+    ResumeMetricsAfterConfirmation();
     if (confirmation != MessageBoxResult.Yes)
     {
       StatusMessage = "Download EML annullato.";
@@ -1540,12 +1546,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     var archivePath = Path.Combine(settings.DownloadRootDirectory, $"{SanitizePathSegment(settings.Email)}.7z");
+    PauseMetricsForConfirmation();
     var confirmation = MessageBox.Show(
       $"Comprimere la cartella download della casella?\n\nCartella: {accountDownloadDirectory}\nArchivio: {archivePath}\nFile da comprimere: {filesToCompress}\n\nLa verifica EML e' gia' stata completata. Se la compressione va a buon fine, la cartella non compressa verra' eliminata.",
       "Conferma compressione EML",
       MessageBoxButton.YesNo,
       MessageBoxImage.Question,
       MessageBoxResult.No);
+    ResumeMetricsAfterConfirmation();
     if (confirmation != MessageBoxResult.Yes)
     {
       StatusMessage = "Compressione EML annullata.";
@@ -2114,7 +2122,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
       }
       StatusMessage = $"Cartelle vuote candidate: {plan.CandidatePaths.Count}. Controlla la preview prima di confermare.";
 
+      PauseMetricsForConfirmation();
       var confirmation = await ShowFolderDeleteConfirmationAsync(plan.CandidatePaths.Count, IncludeSourceSubfolders);
+      ResumeMetricsAfterConfirmation();
       if (confirmation != true)
       {
         StatusMessage = "Spostamento cartelle vuote nel cestino annullato.";
@@ -2165,6 +2175,38 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     });
 
     return tcs.Task;
+  }
+
+  private void PauseMetricsForConfirmation()
+  {
+    _operationMetricsTimerWasRunningBeforeConfirmation = _operationMetricsTimer is not null;
+    _downloadMetricsTimerWasRunningBeforeConfirmation = _downloadMetricsTimer is not null;
+
+    if (_operationMetricsTimerWasRunningBeforeConfirmation)
+    {
+      StopOperationMetricsTimer();
+    }
+
+    if (_downloadMetricsTimerWasRunningBeforeConfirmation)
+    {
+      StopDownloadMetricsTimer();
+    }
+  }
+
+  private void ResumeMetricsAfterConfirmation()
+  {
+    if (_operationMetricsTimerWasRunningBeforeConfirmation && _operationMetricsTimer is null && _operationMetricsVisible)
+    {
+      StartOperationMetricsTimer();
+    }
+
+    if (_downloadMetricsTimerWasRunningBeforeConfirmation && _downloadMetricsTimer is null && _lastDownloadProgress is not null)
+    {
+      StartDownloadMetricsTimer();
+    }
+
+    _operationMetricsTimerWasRunningBeforeConfirmation = false;
+    _downloadMetricsTimerWasRunningBeforeConfirmation = false;
   }
 
   private Task UpdatePreviewMessageLimitAsync(int delta)
